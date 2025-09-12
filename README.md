@@ -135,13 +135,3 @@ Inspired by the work of V8, SpiderMonkey, Deno, Bun, and the wider Rust & WebAss
 
 ```
 
----
-
-**Next Steps**
-
-- Replace `<your-username>` with your actual GitHub handle.
-- Add build badges (CI, npm version) once you set up CI or publish to npm.
-- Drop in a `CONTRIBUTING.md` and `LICENSE` to match the references above.
-
-This version highlights **type safety**, **WebAssembly deployment**, and **browser/Node installation**, while preserving a professional open-source structure recruiters, contributors, and users expect.
-```
