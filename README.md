@@ -86,8 +86,8 @@ src/
 For those building from source or contributing to the Rust core:
 
 ```bash
-git clone https://github.com/<your-username>/strictjs.git
-cd strictjs
+git clone https://github.com/Kenneth732/strictjs_runtime.git
+cd strictjs_runtime
 cargo build --release
 ```
 
