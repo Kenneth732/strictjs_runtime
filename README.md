@@ -1,4 +1,3 @@
-````markdown
 # StrictJS Runtime
 
 > **Type-safe JavaScript runtime with WebAssembly**  
