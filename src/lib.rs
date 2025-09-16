@@ -7,7 +7,7 @@ mod strict_string;
 mod strict_object;
 mod strict_bigint;
 mod strict_function;
-mod reactive_system;
+// mod reactive_system;
 mod loops;
 mod strict_async;
 mod threads;
@@ -30,7 +30,7 @@ pub use strict_async::{
 pub fn init_thread_manager(config: JsValue) -> Result<threads::ThreadManager, JsValue> {
     threads::ThreadManager::new(config)
 }
-pub use reactive_system::{ReactiveCell, ReactiveSystem, Computed};
+// pub use reactive_system::{ReactiveCell, ReactiveSystem, Computed};
 pub use loops::{StrictForLoop, StrictWhileLoop};
 
 use wasm_bindgen::prelude::*;

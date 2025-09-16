@@ -1,20 +1,20 @@
-
-// // src/strict_async/implementation.rs
 use wasm_bindgen::prelude::*;
 use js_sys::{Promise, Function, Array};
 use crate::types::HeapType;
 use wasm_bindgen_futures::JsFuture;
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashSet};
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use futures::future::join_all;
+use web_sys;
 
 #[wasm_bindgen]
 pub struct StrictAsync {
     task_queue: VecDeque<AsyncTask>,
     max_concurrent: usize,
-    running_tasks: usize,
-    // Track closures for proper cleanup
-    active_closures: Rc<RefCell<Vec<JsValue>>>, // Store JS references to closures
+    running_tasks: AtomicUsize,
+    active_closures: RefCell<HashSet<JsValue>>,
+    last_error: RefCell<Option<String>>,
 }
 
 #[derive(Clone)]
@@ -23,6 +23,7 @@ struct AsyncTask {
     callback: Option<Function>,
     error_handler: Option<Function>,
     heap_type: HeapType,
+    task_id: usize,
 }
 
 #[wasm_bindgen]
@@ -32,8 +33,9 @@ impl StrictAsync {
         StrictAsync {
             task_queue: VecDeque::new(),
             max_concurrent,
-            running_tasks: 0,
-            active_closures: Rc::new(RefCell::new(Vec::new())),
+            running_tasks: AtomicUsize::new(0),
+            active_closures: RefCell::new(HashSet::new()),
+            last_error: RefCell::new(None),
         }
     }
 
@@ -44,36 +46,60 @@ impl StrictAsync {
         callback: Option<Function>,
         error_handler: Option<Function>,
         return_type: HeapType,
-    ) {
+    ) -> usize {
+        let task_id = self.task_queue.len() + 1;
         self.task_queue.push_back(AsyncTask {
             promise,
             callback,
             error_handler,
             heap_type: return_type,
+            task_id,
         });
+        task_id
     }
 
     #[wasm_bindgen(js_name = runTasks)]
     pub async fn run_tasks(&mut self) -> Result<JsValue, JsValue> {
         let results = Array::new();
+        let mut tasks_to_run = Vec::new();
         
+        // Collect tasks to run concurrently
         while let Some(task) = self.task_queue.pop_front() {
-            if self.running_tasks >= self.max_concurrent {
+            if self.running_tasks.load(Ordering::SeqCst) + tasks_to_run.len() >= self.max_concurrent {
                 self.task_queue.push_front(task);
                 break;
             }
-            
-            self.running_tasks += 1;
-            let result = self.execute_task(task).await;
-            self.running_tasks -= 1;
-            
-            results.push(&result?);
+            tasks_to_run.push(task);
         }
         
-        // Clean up any remaining closures
-        self.cleanup_closures();
+        // Execute tasks concurrently
+        let task_futures: Vec<_> = tasks_to_run.into_iter().map(|task| {
+            self.execute_task_concurrent(task)
+        }).collect();
         
+        let task_results = join_all(task_futures).await;
+        
+        for result in task_results {
+            match result {
+                Ok(value) => {
+                    let _ = results.push(&value);
+                }
+                Err(e) => {
+                    *self.last_error.borrow_mut() = Some(format!("Task error: {:?}", e));
+                    let _ = results.push(&JsValue::NULL);
+                }
+            }
+        }
+        
+        self.cleanup_closures();
         Ok(results.into())
+    }
+
+    async fn execute_task_concurrent(&self, task: AsyncTask) -> Result<JsValue, JsValue> {
+        self.running_tasks.fetch_add(1, Ordering::SeqCst);
+        let result = self.execute_task(task).await;
+        self.running_tasks.fetch_sub(1, Ordering::SeqCst);
+        result
     }
 
     async fn execute_task(&self, task: AsyncTask) -> Result<JsValue, JsValue> {
@@ -81,15 +107,13 @@ impl StrictAsync {
         
         match result {
             Ok(value) => {
+                let processed_value = self.process_result(value, task.heap_type)?;
                 if let Some(callback) = task.callback {
-                    let processed_value = self.process_result(value, task.heap_type)?;
                     let args = Array::new();
                     args.push(&processed_value);
                     callback.apply(&JsValue::NULL, &args)?;
-                    Ok(processed_value)
-                } else {
-                    self.process_result(value, task.heap_type)
                 }
+                Ok(processed_value)
             }
             Err(error) => {
                 if let Some(error_handler) = task.error_handler {
@@ -107,7 +131,8 @@ impl StrictAsync {
     fn process_result(&self, value: JsValue, heap_type: HeapType) -> Result<JsValue, JsValue> {
         match heap_type {
             HeapType::U8 | HeapType::I8 | HeapType::U16 | HeapType::I16 
-            | HeapType::U32 | HeapType::I32 | HeapType::Bool => {
+            | HeapType::U32 | HeapType::I32 | HeapType::U64 | HeapType::I64
+            | HeapType::F32 | HeapType::F64 | HeapType::Number | HeapType::Bool => {
                 if let Some(num) = value.as_f64() {
                     let clamped = self.clamp_value(heap_type, num);
                     Ok(JsValue::from_f64(clamped))
@@ -123,13 +148,37 @@ impl StrictAsync {
                     }
                 }
             }
-            HeapType::Str => {
+            HeapType::Str | HeapType::Str16 => {
                 if let Some(str_val) = value.as_string() {
                     Ok(JsValue::from_str(&str_val))
                 } else {
                     Ok(JsValue::from_str(""))
                 }
             }
+            HeapType::Array => {
+                if value.is_array() {
+                    Ok(value)
+                } else {
+                    Ok(Array::new().into())
+                }
+            }
+            HeapType::Buffer => {
+                if value.is_instance_of::<js_sys::Uint8Array>() 
+                    || value.is_instance_of::<js_sys::ArrayBuffer>() {
+                    Ok(value)
+                } else {
+                    Ok(js_sys::Uint8Array::new_with_length(0).into())
+                }
+            }
+            HeapType::Date => {
+                if value.is_instance_of::<js_sys::Date>() {
+                    Ok(value)
+                } else {
+                    Ok(js_sys::Date::new_0().into())
+                }
+            }
+            HeapType::Null => Ok(JsValue::NULL),
+            HeapType::Undefined => Ok(JsValue::UNDEFINED),
             _ => Ok(value),
         }
     }
@@ -142,6 +191,11 @@ impl StrictAsync {
             HeapType::I16 => value.clamp(i16::MIN as f64, i16::MAX as f64),
             HeapType::U32 => value.clamp(0.0, u32::MAX as f64),
             HeapType::I32 => value.clamp(i32::MIN as f64, i32::MAX as f64),
+            HeapType::U64 => value.clamp(0.0, u64::MAX as f64),
+            HeapType::I64 => value.clamp(i64::MIN as f64, i64::MAX as f64),
+            HeapType::F32 => value as f32 as f64,
+            HeapType::F64 => value,
+            HeapType::Number => value,
             HeapType::Bool => if value != 0.0 { 1.0 } else { 0.0 },
             _ => value,
         }
@@ -154,7 +208,7 @@ impl StrictAsync {
 
     #[wasm_bindgen(js_name = getRunningTasks)]
     pub fn get_running_tasks(&self) -> usize {
-        self.running_tasks
+        self.running_tasks.load(Ordering::SeqCst)
     }
 
     #[wasm_bindgen(js_name = clearQueue)]
@@ -162,19 +216,41 @@ impl StrictAsync {
         self.task_queue.clear();
     }
 
+    #[wasm_bindgen(js_name = cancelTask)]
+    pub fn cancel_task(&mut self, task_id: usize) -> bool {
+        if let Some(index) = self.task_queue.iter().position(|t| t.task_id == task_id) {
+            self.task_queue.remove(index);
+            true
+        } else {
+            false
+        }
+    }
+
+    #[wasm_bindgen(js_name = setMaxConcurrent)]
+    pub fn set_max_concurrent(&mut self, max: usize) {
+        self.max_concurrent = max;
+    }
+
+    #[wasm_bindgen(js_name = getLastError)]
+    pub fn get_last_error(&self) -> Option<String> {
+        self.last_error.borrow().clone()
+    }
+
     #[wasm_bindgen(js_name = cleanup)]
     pub fn cleanup(&self) {
         self.cleanup_closures();
+        *self.last_error.borrow_mut() = None;
     }
 
     fn cleanup_closures(&self) {
-        self.active_closures.borrow_mut().clear();
+        let mut closures = self.active_closures.borrow_mut();
+        closures.clear();
     }
 }
 
 impl Drop for StrictAsync {
     fn drop(&mut self) {
-        self.cleanup_closures();
+        self.cleanup();
     }
 }
 
@@ -182,15 +258,14 @@ impl Drop for StrictAsync {
 pub struct StrictPromise {
     promise: Promise,
     return_type: HeapType,
-    // Track closures for cleanup
-    closures: Rc<RefCell<Vec<JsValue>>>, // Store JS references
+    closures: RefCell<Vec<JsValue>>,
 }
 
 #[wasm_bindgen]
 impl StrictPromise {
     #[wasm_bindgen(constructor)]
     pub fn new(executor: Function, return_type: HeapType) -> Result<StrictPromise, JsValue> {
-        let closures = Rc::new(RefCell::new(Vec::new()));
+        let closures = RefCell::new(Vec::new());
         
         let promise = Promise::new(&mut |resolve, reject| {
             let args = Array::new();
@@ -212,24 +287,16 @@ impl StrictPromise {
     #[wasm_bindgen(js_name = awaitValue)]
     pub async fn await_value(&self) -> Result<JsValue, JsValue> {
         let result = JsFuture::from(self.promise.clone()).await?;
-        Ok(self.clamp_result(result))
+        Ok(self.process_result(result))
     }
 
-    fn clamp_result(&self, value: JsValue) -> JsValue {
+    fn process_result(&self, value: JsValue) -> JsValue {
         match self.return_type {
             HeapType::U8 | HeapType::I8 | HeapType::U16 | HeapType::I16 
-            | HeapType::U32 | HeapType::I32 | HeapType::Bool => {
+            | HeapType::U32 | HeapType::I32 | HeapType::U64 | HeapType::I64
+            | HeapType::F32 | HeapType::F64 | HeapType::Number | HeapType::Bool => {
                 if let Some(num) = value.as_f64() {
-                    let clamped = match self.return_type {
-                        HeapType::U8 => num.clamp(0.0, u8::MAX as f64),
-                        HeapType::I8 => num.clamp(i8::MIN as f64, i8::MAX as f64),
-                        HeapType::U16 => num.clamp(0.0, u16::MAX as f64),
-                        HeapType::I16 => num.clamp(i16::MIN as f64, i16::MAX as f64),
-                        HeapType::U32 => num.clamp(0.0, u32::MAX as f64),
-                        HeapType::I32 => num.clamp(i32::MIN as f64, i32::MAX as f64),
-                        HeapType::Bool => if num != 0.0 { 1.0 } else { 0.0 },
-                        _ => num,
-                    };
+                    let clamped = self.clamp_value(num);
                     JsValue::from_f64(clamped)
                 } else if value.is_truthy() {
                     match self.return_type {
@@ -247,55 +314,69 @@ impl StrictPromise {
         }
     }
 
+    fn clamp_value(&self, value: f64) -> f64 {
+        match self.return_type {
+            HeapType::U8 => value.clamp(0.0, u8::MAX as f64),
+            HeapType::I8 => value.clamp(i8::MIN as f64, i8::MAX as f64),
+            HeapType::U16 => value.clamp(0.0, u16::MAX as f64),
+            HeapType::I16 => value.clamp(i16::MIN as f64, i16::MAX as f64),
+            HeapType::U32 => value.clamp(0.0, u32::MAX as f64),
+            HeapType::I32 => value.clamp(i32::MIN as f64, i32::MAX as f64),
+            HeapType::U64 => value.clamp(0.0, u64::MAX as f64),
+            HeapType::I64 => value.clamp(i64::MIN as f64, i64::MAX as f64),
+            HeapType::F32 => value as f32 as f64,
+            HeapType::F64 => value,
+            HeapType::Number => value,
+            HeapType::Bool => if value != 0.0 { 1.0 } else { 0.0 },
+            _ => value,
+        }
+    }
+
     #[wasm_bindgen]
     pub fn then(&self, on_fulfilled: Function) -> Result<StrictPromise, JsValue> {
-        let return_type = self.return_type;
-        let closures = Rc::new(RefCell::new(Vec::new()));
+        use wasm_bindgen::closure::Closure;
         
-        let closure = Closure::wrap(Box::new(move |value: JsValue| {
+        let return_type = self.return_type;
+        
+        let closure = Closure::once(move |value: JsValue| {
             let args = Array::new();
             args.push(&value);
             let _ = on_fulfilled.apply(&JsValue::NULL, &args);
-        }) as Box<dyn FnMut(JsValue)>);
-        
-        // Store the JS value of the closure to keep it alive
-        closures.borrow_mut().push(closure.as_ref().into());
+        });
         
         let new_promise = self.promise.then(&closure);
         
-        // Forget the closure to prevent it from being dropped
-        closure.forget();
+        // Store the closure for cleanup
+        self.closures.borrow_mut().push(closure.into_js_value());
         
         Ok(StrictPromise {
             promise: new_promise,
             return_type,
-            closures,
+            closures: self.closures.clone(),
         })
     }
 
     #[wasm_bindgen]
     pub fn catch(&self, on_rejected: Function) -> Result<StrictPromise, JsValue> {
-        let return_type = self.return_type;
-        let closures = Rc::new(RefCell::new(Vec::new()));
+        use wasm_bindgen::closure::Closure;
         
-        let closure = Closure::wrap(Box::new(move |error: JsValue| {
+        let return_type = self.return_type;
+        
+        let closure = Closure::once(move |error: JsValue| {
             let args = Array::new();
             args.push(&error);
             let _ = on_rejected.apply(&JsValue::NULL, &args);
-        }) as Box<dyn FnMut(JsValue)>);
-        
-        // Store the JS value of the closure to keep it alive
-        closures.borrow_mut().push(closure.as_ref().into());
+        });
         
         let new_promise = self.promise.catch(&closure);
         
-        // Forget the closure to prevent it from being dropped
-        closure.forget();
+        // Store the closure for cleanup
+        self.closures.borrow_mut().push(closure.into_js_value());
         
         Ok(StrictPromise {
             promise: new_promise,
             return_type,
-            closures,
+            closures: self.closures.clone(),
         })
     }
 
@@ -317,7 +398,7 @@ pub struct StrictTimeout {
     callback: Function,
     return_type: HeapType,
     timeout_id: Option<i32>,
-    closure: Option<JsValue>, // Store JS reference to closure
+    closure: Option<JsValue>,
 }
 
 #[wasm_bindgen]
@@ -334,26 +415,25 @@ impl StrictTimeout {
     }
 
     pub async fn start(&mut self) -> Result<JsValue, JsValue> {
-        // Clean up any existing timeout
         self.cancel();
         
-        let promise = Promise::new(&mut |resolve, reject| {
+        let promise = Promise::new(&mut |resolve, _reject| {
             let callback_clone = self.callback.clone();
             let resolve_clone = resolve.clone();
-            let reject_clone = reject.clone();
             
-            let closure = Closure::wrap(Box::new(move || {
+            let closure = Closure::once(move || {
                 match callback_clone.call0(&JsValue::NULL) {
                     Ok(value) => {
                         let _ = resolve_clone.call1(&JsValue::NULL, &value);
                     }
                     Err(e) => {
-                        let _ = reject_clone.call1(&JsValue::NULL, &e);
+                        // Still resolve but with error indicator
+                        let _ = resolve_clone.call1(&JsValue::NULL, &JsValue::NULL);
                     }
                 }
-            }) as Box<dyn FnMut()>);
+            });
             
-            let timeout_id = web_sys::window()
+            self.timeout_id = web_sys::window()
                 .and_then(|w| {
                     w.set_timeout_with_callback_and_timeout_and_arguments(
                         closure.as_ref().unchecked_ref(),
@@ -362,15 +442,11 @@ impl StrictTimeout {
                     ).ok()
                 });
             
-            self.timeout_id = timeout_id;
-            self.closure = Some(closure.as_ref().into());
-            
-            // Forget the closure to prevent it from being dropped
-            closure.forget();
+            self.closure = Some(closure.into_js_value());
         });
         
         let result = JsFuture::from(promise).await?;
-        Ok(self.clamp_result(result))
+        Ok(self.process_result(result))
     }
 
     #[wasm_bindgen(js_name = cancel)]
@@ -383,21 +459,13 @@ impl StrictTimeout {
         self.closure = None;
     }
 
-    fn clamp_result(&self, value: JsValue) -> JsValue {
+    fn process_result(&self, value: JsValue) -> JsValue {
         match self.return_type {
             HeapType::U8 | HeapType::I8 | HeapType::U16 | HeapType::I16 
-            | HeapType::U32 | HeapType::I32 | HeapType::Bool => {
+            | HeapType::U32 | HeapType::I32 | HeapType::U64 | HeapType::I64
+            | HeapType::F32 | HeapType::F64 | HeapType::Number | HeapType::Bool => {
                 if let Some(num) = value.as_f64() {
-                    let clamped = match self.return_type {
-                        HeapType::U8 => num.clamp(0.0, u8::MAX as f64),
-                        HeapType::I8 => num.clamp(i8::MIN as f64, i8::MAX as f64),
-                        HeapType::U16 => num.clamp(0.0, u16::MAX as f64),
-                        HeapType::I16 => num.clamp(i16::MIN as f64, i16::MAX as f64),
-                        HeapType::U32 => num.clamp(0.0, u32::MAX as f64),
-                        HeapType::I32 => num.clamp(i32::MIN as f64, i32::MAX as f64),
-                        HeapType::Bool => if num != 0.0 { 1.0 } else { 0.0 },
-                        _ => num,
-                    };
+                    let clamped = self.clamp_value(num);
                     JsValue::from_f64(clamped)
                 } else if value.is_truthy() {
                     match self.return_type {
@@ -411,6 +479,24 @@ impl StrictTimeout {
                     }
                 }
             }
+            _ => value,
+        }
+    }
+
+    fn clamp_value(&self, value: f64) -> f64 {
+        match self.return_type {
+            HeapType::U8 => value.clamp(0.0, u8::MAX as f64),
+            HeapType::I8 => value.clamp(i8::MIN as f64, i8::MAX as f64),
+            HeapType::U16 => value.clamp(0.0, u16::MAX as f64),
+            HeapType::I16 => value.clamp(i16::MIN as f64, i16::MAX as f64),
+            HeapType::U32 => value.clamp(0.0, u32::MAX as f64),
+            HeapType::I32 => value.clamp(i32::MIN as f64, i32::MAX as f64),
+            HeapType::U64 => value.clamp(0.0, u64::MAX as f64),
+            HeapType::I64 => value.clamp(i64::MIN as f64, i64::MAX as f64),
+            HeapType::F32 => value as f32 as f64,
+            HeapType::F64 => value,
+            HeapType::Number => value,
+            HeapType::Bool => if value != 0.0 { 1.0 } else { 0.0 },
             _ => value,
         }
     }
@@ -430,12 +516,26 @@ pub async fn strict_fetch(url: &str, return_type: HeapType) -> Result<JsValue, J
     let response: web_sys::Response = response.dyn_into()?;
     
     if response.ok() {
-        let text_promise = response.text()?;
-        let text = JsFuture::from(text_promise).await?;
-        
         match return_type {
-            HeapType::Str => Ok(text),
+            HeapType::Str | HeapType::Str16 => {
+                let text_promise = response.text()?;
+                let text = JsFuture::from(text_promise).await?;
+                Ok(text)
+            }
+            HeapType::Array => {
+                let json_promise = response.json()?;
+                let json = JsFuture::from(json_promise).await?;
+                Ok(json)
+            }
+            HeapType::Buffer => {
+                let array_buffer_promise = response.array_buffer()?;
+                let array_buffer = JsFuture::from(array_buffer_promise).await?;
+                Ok(array_buffer)
+            }
             _ => {
+                let text_promise = response.text()?;
+                let text = JsFuture::from(text_promise).await?;
+                
                 if let Some(num_str) = text.as_string() {
                     if let Ok(num) = num_str.parse::<f64>() {
                         let clamped = match return_type {
@@ -445,6 +545,11 @@ pub async fn strict_fetch(url: &str, return_type: HeapType) -> Result<JsValue, J
                             HeapType::I16 => num.clamp(i16::MIN as f64, i16::MAX as f64),
                             HeapType::U32 => num.clamp(0.0, u32::MAX as f64),
                             HeapType::I32 => num.clamp(i32::MIN as f64, i32::MAX as f64),
+                            HeapType::U64 => num.clamp(0.0, u64::MAX as f64),
+                            HeapType::I64 => num.clamp(i64::MIN as f64, i64::MAX as f64),
+                            HeapType::F32 => num as f32 as f64,
+                            HeapType::F64 => num,
+                            HeapType::Number => num,
                             HeapType::Bool => if num != 0.0 { 1.0 } else { 0.0 },
                             _ => num,
                         };
@@ -461,7 +566,3 @@ pub async fn strict_fetch(url: &str, return_type: HeapType) -> Result<JsValue, J
         Err(JsValue::from_str("HTTP error"))
     }
 }
-
-
-
-
