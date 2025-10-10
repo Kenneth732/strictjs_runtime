@@ -1,8 +1,11 @@
+
+
+// src/strict_async/implementation.rs
 use wasm_bindgen::prelude::*;
 use js_sys::{Promise, Function, Array};
 use crate::types::HeapType;
 use wasm_bindgen_futures::JsFuture;
-use std::collections::{VecDeque, HashSet};
+use std::collections::{HashSet, BinaryHeap};
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use futures::future::join_all;
@@ -10,20 +13,58 @@ use web_sys;
 
 #[wasm_bindgen]
 pub struct StrictAsync {
-    task_queue: VecDeque<AsyncTask>,
+    task_queue: BinaryHeap<AsyncTask>, // Changed from VecDeque to BinaryHeap for priority
     max_concurrent: usize,
     running_tasks: AtomicUsize,
     active_closures: RefCell<HashSet<JsValue>>,
     last_error: RefCell<Option<String>>,
+    next_task_id: AtomicUsize,
 }
 
-#[derive(Clone)]
 struct AsyncTask {
     promise: Promise,
     callback: Option<Function>,
     error_handler: Option<Function>,
     heap_type: HeapType,
     task_id: usize,
+    priority: TaskPriority,
+}
+
+// Implement manual comparison for AsyncTask (since Promise doesn't implement PartialEq)
+impl PartialEq for AsyncTask {
+    fn eq(&self, other: &Self) -> bool {
+        self.task_id == other.task_id
+    }
+}
+
+impl Eq for AsyncTask {}
+
+impl Ord for AsyncTask {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.priority.cmp(&self.priority) // Reverse for max-heap behavior
+            .then_with(|| self.task_id.cmp(&other.task_id))
+    }
+}
+
+impl PartialOrd for AsyncTask {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TaskPriority {
+    Low = 0,
+    Normal = 1,
+    High = 2,
+    Critical = 3,
+}
+
+impl Default for TaskPriority {
+    fn default() -> Self {
+        TaskPriority::Normal
+    }
 }
 
 #[wasm_bindgen]
@@ -31,11 +72,12 @@ impl StrictAsync {
     #[wasm_bindgen(constructor)]
     pub fn new(max_concurrent: usize) -> StrictAsync {
         StrictAsync {
-            task_queue: VecDeque::new(),
+            task_queue: BinaryHeap::new(),
             max_concurrent,
             running_tasks: AtomicUsize::new(0),
             active_closures: RefCell::new(HashSet::new()),
             last_error: RefCell::new(None),
+            next_task_id: AtomicUsize::new(1),
         }
     }
 
@@ -47,14 +89,29 @@ impl StrictAsync {
         error_handler: Option<Function>,
         return_type: HeapType,
     ) -> usize {
-        let task_id = self.task_queue.len() + 1;
-        self.task_queue.push_back(AsyncTask {
+        self.add_task_with_priority(promise, callback, error_handler, return_type, TaskPriority::Normal)
+    }
+
+    #[wasm_bindgen(js_name = addTaskWithPriority)]
+    pub fn add_task_with_priority(
+        &mut self,
+        promise: Promise,
+        callback: Option<Function>,
+        error_handler: Option<Function>,
+        return_type: HeapType,
+        priority: TaskPriority,
+    ) -> usize {
+        let task_id = self.next_task_id.fetch_add(1, Ordering::SeqCst);
+        let task = AsyncTask {
             promise,
             callback,
             error_handler,
             heap_type: return_type,
             task_id,
-        });
+            priority,
+        };
+        
+        self.task_queue.push(task);
         task_id
     }
 
@@ -63,10 +120,11 @@ impl StrictAsync {
         let results = Array::new();
         let mut tasks_to_run = Vec::new();
         
-        // Collect tasks to run concurrently
-        while let Some(task) = self.task_queue.pop_front() {
+        // Collect tasks to run concurrently based on priority
+        while let Some(task) = self.task_queue.pop() {
             if self.running_tasks.load(Ordering::SeqCst) + tasks_to_run.len() >= self.max_concurrent {
-                self.task_queue.push_front(task);
+                // Put it back if we can't run it now
+                self.task_queue.push(task);
                 break;
             }
             tasks_to_run.push(task);
@@ -218,12 +276,26 @@ impl StrictAsync {
 
     #[wasm_bindgen(js_name = cancelTask)]
     pub fn cancel_task(&mut self, task_id: usize) -> bool {
-        if let Some(index) = self.task_queue.iter().position(|t| t.task_id == task_id) {
-            self.task_queue.remove(index);
-            true
-        } else {
-            false
+        // Convert BinaryHeap to Vec to search for the task
+        let mut tasks: Vec<AsyncTask> = self.task_queue.drain().collect();
+        let mut found = false;
+        
+        // Remove the task with matching ID
+        tasks.retain(|task| {
+            if task.task_id == task_id {
+                found = true;
+                false
+            } else {
+                true
+            }
+        });
+        
+        // Rebuild the BinaryHeap
+        for task in tasks {
+            self.task_queue.push(task);
         }
+        
+        found
     }
 
     #[wasm_bindgen(js_name = setMaxConcurrent)]
@@ -240,6 +312,11 @@ impl StrictAsync {
     pub fn cleanup(&self) {
         self.cleanup_closures();
         *self.last_error.borrow_mut() = None;
+    }
+
+    #[wasm_bindgen(js_name = getNextTaskId)]
+    pub fn get_next_task_id(&self) -> usize {
+        self.next_task_id.load(Ordering::SeqCst)
     }
 
     fn cleanup_closures(&self) {
@@ -426,7 +503,7 @@ impl StrictTimeout {
                     Ok(value) => {
                         let _ = resolve_clone.call1(&JsValue::NULL, &value);
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         // Still resolve but with error indicator
                         let _ = resolve_clone.call1(&JsValue::NULL, &JsValue::NULL);
                     }
@@ -566,3 +643,4 @@ pub async fn strict_fetch(url: &str, return_type: HeapType) -> Result<JsValue, J
         Err(JsValue::from_str("HTTP error"))
     }
 }
+

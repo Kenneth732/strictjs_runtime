@@ -1,0 +1,82 @@
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StrictArray Test</title>
+</head>
+<body>
+  <script type="module">
+    import init, { StrictArray, HeapType } from "./pkg/strictjs_runtime.js";
+    await init();
+
+// ===== IMAGE PROCESSING =====
+class ImageProcessor {
+  constructor(width, height) {
+    this.width = width;
+    this.height = height;
+    this.pixelData = new StrictArray(HeapType.U8, width * height * 4); // RGBA
+  }
+  
+  setPixel(x, y, r, g, b, a = 255) {
+    const index = (y * this.width + x) * 4;
+    this.pixelData.setValue(index, r);
+    this.pixelData.setValue(index + 1, g);
+    this.pixelData.setValue(index + 2, b);
+    this.pixelData.setValue(index + 3, a);
+  }
+  
+  getPixel(x, y) {
+    const index = (y * this.width + x) * 4;
+    return {
+      r: this.pixelData.getValue(index),
+      g: this.pixelData.getValue(index + 1),
+      b: this.pixelData.getValue(index + 2),
+      a: this.pixelData.getValue(index + 3)
+    };
+  }
+  
+  applyGrayscale() {
+    return this.pixelData.map((value, index) => {
+      // Only process RGB components (skip alpha)
+      if (index % 4 === 3) return value; // Keep alpha as is
+      
+      const pixelStart = Math.floor(index / 4) * 4;
+      const r = this.pixelData.getValue(pixelStart);
+      const g = this.pixelData.getValue(pixelStart + 1);
+      const b = this.pixelData.getValue(pixelStart + 2);
+      
+      // Convert to grayscale
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      return gray;
+    });
+  }
+  
+  generateGradient() {
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const r = Math.floor((x / this.width) * 255);
+        const g = Math.floor((y / this.height) * 255);
+        const b = Math.floor(((x + y) / (this.width + this.height)) * 255);
+        this.setPixel(x, y, r, g, b);
+      }
+    }
+    return this.pixelData;
+  }
+}
+
+// Usage
+const imageProc = new ImageProcessor(256, 256);
+imageProc.generateGradient();
+const grayscale = imageProc.applyGrayscale();
+
+console.log("Image processing complete - gradient generated and converted to grayscale");
+  </script>
+</body>
+</html>
+
+
+
