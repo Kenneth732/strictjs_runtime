@@ -163,7 +163,7 @@ impl StrictArray {
                 if bytes.len() >= 8 {
                     let array: [u8; 8] = bytes[0..8].try_into()
                         .map_err(|_| JsValue::from_str("Invalid byte length for u64"))?;
-                    // Note: u64 may lose precision when converted to f64
+                  
                     Ok(JsValue::from_f64(u64::from_le_bytes(array) as f64))
                 } else {
                     Err(JsValue::from_str("Invalid element size for U64 type"))
@@ -173,7 +173,7 @@ impl StrictArray {
                 if bytes.len() >= 8 {
                     let array: [u8; 8] = bytes[0..8].try_into()
                         .map_err(|_| JsValue::from_str("Invalid byte length for i64"))?;
-                    // Note: i64 may lose precision when converted to f64
+                   
                     Ok(JsValue::from_f64(i64::from_le_bytes(array) as f64))
                 } else {
                     Err(JsValue::from_str("Invalid element size for I64 type"))
@@ -198,13 +198,11 @@ impl StrictArray {
                 }
             }
             HeapType::Str | HeapType::Str16 => {
-                // For string types, return the bytes as a Uint8Array
                 let array = Uint8Array::new_with_length(bytes.len() as u32);
                 array.copy_from(bytes);
                 Ok(array.into())
             }
             _ => {
-                // For unsupported complex types, return the raw bytes
                 let array = Uint8Array::new_with_length(bytes.len() as u32);
                 array.copy_from(bytes);
                 Ok(array.into())
@@ -214,12 +212,11 @@ impl StrictArray {
 
     #[wasm_bindgen(js_name = setValue)]
     pub fn set_value(&mut self, index: usize, value: JsValue) -> Result<(), JsValue> {
-        let heap_type = self.heap; // Copy heap type before mutable borrow
+        let heap_type = self.heap; 
         let bytes_mut = self.get_bytes_mut(index)?;
 
         match heap_type {
             HeapType::Str | HeapType::Str16 => {
-                // For string types, expect Uint8Array
                 if let Ok(uint8_array) = value.dyn_into::<Uint8Array>() {
                     let copy_len = bytes_mut.len().min(uint8_array.length() as usize);
                     uint8_array.copy_to(&mut bytes_mut[0..copy_len]);
