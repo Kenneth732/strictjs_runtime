@@ -347,7 +347,6 @@ impl StrictArray {
                 }
             }
             _ => {
-                // For unsupported types, set to default value
                 let default_value = heap_type.get_default_value().to_le_bytes();
                 let copy_len = bytes_mut.len().min(default_value.len());
                 bytes_mut[0..copy_len].copy_from_slice(&default_value[0..copy_len]);
@@ -538,19 +537,15 @@ impl StrictArray {
     }
 }
 
-// Additional safety and utility methods
 impl StrictArray {
-    /// Creates a slice view of the underlying buffer for safe access
     pub fn as_slice(&self) -> &[u8] {
         &self.buffer
     }
 
-    /// Creates a mutable slice view of the underlying buffer for safe access
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.buffer
     }
 
-    /// Validates that the array is properly sized for its type
     pub fn validate(&self) -> Result<(), JsValue> {
         if self.buffer.len() != self.len * self.element_size {
             return Err(JsValue::from_str("Array buffer size mismatch"));
@@ -558,7 +553,6 @@ impl StrictArray {
         Ok(())
     }
 
-    /// Safe conversion to Vec<f64> for numeric types
     pub fn to_vec_f64(&self) -> Result<Vec<f64>, JsValue> {
         if !self.heap.is_numeric() {
             return Err(JsValue::from_str("Array type is not numeric"));
@@ -576,12 +570,10 @@ impl StrictArray {
         Ok(result)
     }
 
-    /// Zero-copy access to raw bytes for a specific element
     pub fn get_element_bytes(&self, index: usize) -> Result<&[u8], JsValue> {
         self.get_bytes(index)
     }
 
-    /// Zero-copy mutable access to raw bytes for a specific element
     pub fn get_element_bytes_mut(&mut self, index: usize) -> Result<&mut [u8], JsValue> {
         self.get_bytes_mut(index)
     }
