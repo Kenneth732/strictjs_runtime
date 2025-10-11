@@ -1,5 +1,5 @@
 
-// src/strict_object/implementation.rs
+//src/strict_object/implementation.rs
 use wasm_bindgen::prelude::*;
 use js_sys::{Object, Reflect, Array};
 use crate::types::schema::{Schema, FieldType};
@@ -18,6 +18,13 @@ enum FieldInfo {
     Simple(String),
     Nested(Schema),
     Array(Box<FieldInfo>),
+    Tensor,           // Simplified - dimensions handled by schema
+    Matrix,           // Simplified - dimensions handled by schema  
+    Vector,           // Simplified - length handled by schema
+    SparseMatrix,
+    Quantized,        // Simplified - precision handled by schema
+    GPU,              // Simplified - type handled by schema
+    SIMD,             // Simplified - type handled by schema
 }
 
 #[wasm_bindgen]
@@ -61,7 +68,14 @@ impl StrictObject {
                                     return Err(JsValue::from_str(&format!("Missing schema for nested array field: {}", field_str)));
                                 }
                             }
-                            _ => return Err(JsValue::from_str("Invalid array element type")),
+                            FieldType::Tensor(_) => FieldInfo::Tensor,
+                            FieldType::Matrix(_, _) => FieldInfo::Matrix,
+                            FieldType::Vector(_) => FieldInfo::Vector,
+                            FieldType::SparseMatrix => FieldInfo::SparseMatrix,
+                            FieldType::Quantized(_) => FieldInfo::Quantized,
+                            FieldType::GPU(_) => FieldInfo::GPU,
+                            FieldType::SIMD(_) => FieldInfo::SIMD,
+                            FieldType::Array(_) => return Err(JsValue::from_str("Nested arrays not supported")),
                         };
                         self.field_cache.insert(field_str.clone(), FieldInfo::Array(Box::new(element_info)));
                         Reflect::set(&self.data, &field, &Array::new().into())?;
@@ -72,6 +86,34 @@ impl StrictObject {
                             let nested_obj = self.create_nested_object(&nested_schema)?;
                             Reflect::set(&self.data, &field, &nested_obj.to_js())?;
                         }
+                    }
+                    FieldType::Tensor(_) => {
+                        self.field_cache.insert(field_str.clone(), FieldInfo::Tensor);
+                        Reflect::set(&self.data, &field, &Array::new().into())?;
+                    }
+                    FieldType::Matrix(_, _) => {
+                        self.field_cache.insert(field_str.clone(), FieldInfo::Matrix);
+                        Reflect::set(&self.data, &field, &Array::new().into())?;
+                    }
+                    FieldType::Vector(_) => {
+                        self.field_cache.insert(field_str.clone(), FieldInfo::Vector);
+                        Reflect::set(&self.data, &field, &Array::new().into())?;
+                    }
+                    FieldType::SparseMatrix => {
+                        self.field_cache.insert(field_str.clone(), FieldInfo::SparseMatrix);
+                        Reflect::set(&self.data, &field, &Object::new().into())?;
+                    }
+                    FieldType::Quantized(_) => {
+                        self.field_cache.insert(field_str.clone(), FieldInfo::Quantized);
+                        Reflect::set(&self.data, &field, &Array::new().into())?;
+                    }
+                    FieldType::GPU(_) => {
+                        self.field_cache.insert(field_str.clone(), FieldInfo::GPU);
+                        Reflect::set(&self.data, &field, &Array::new().into())?;
+                    }
+                    FieldType::SIMD(_) => {
+                        self.field_cache.insert(field_str.clone(), FieldInfo::SIMD);
+                        Reflect::set(&self.data, &field, &Array::new().into())?;
                     }
                 }
             }
@@ -123,9 +165,101 @@ impl StrictObject {
                 FieldInfo::Simple(type_str) => {
                     self.set_simple_field(field, &type_str, value)
                 }
+                FieldInfo::Tensor => {
+                    self.set_tensor_field(field, value)
+                }
+                FieldInfo::Matrix => {
+                    self.set_matrix_field(field, value)
+                }
+                FieldInfo::Vector => {
+                    self.set_vector_field(field, value)
+                }
+                FieldInfo::SparseMatrix => {
+                    self.set_sparse_matrix_field(field, value)
+                }
+                FieldInfo::Quantized => {
+                    self.set_quantized_field(field, value)
+                }
+                FieldInfo::GPU => {
+                    self.set_gpu_field(field, value)
+                }
+                FieldInfo::SIMD => {
+                    self.set_simd_field(field, value)
+                }
             }
         } else {
             Err(JsValue::from_str(&format!("Field '{}' not in schema", field)))
+        }
+    }
+
+    // AI/ML field setters
+    fn set_tensor_field(&self, field: &str, value: JsValue) -> Result<(), JsValue> {
+        if value.is_object() || value.is_array() {
+            Reflect::set(&self.data, &JsValue::from_str(field), &value)
+                .map(|_| ())
+                .map_err(|_| JsValue::from_str("Failed to set tensor field"))
+        } else {
+            Err(JsValue::from_str("Tensor fields require object or array values"))
+        }
+    }
+
+    fn set_matrix_field(&self, field: &str, value: JsValue) -> Result<(), JsValue> {
+        if value.is_object() || value.is_array() {
+            Reflect::set(&self.data, &JsValue::from_str(field), &value)
+                .map(|_| ())
+                .map_err(|_| JsValue::from_str("Failed to set matrix field"))
+        } else {
+            Err(JsValue::from_str("Matrix fields require object or array values"))
+        }
+    }
+
+    fn set_vector_field(&self, field: &str, value: JsValue) -> Result<(), JsValue> {
+        if value.is_array() {
+            Reflect::set(&self.data, &JsValue::from_str(field), &value)
+                .map(|_| ())
+                .map_err(|_| JsValue::from_str("Failed to set vector field"))
+        } else {
+            Err(JsValue::from_str("Vector fields require array values"))
+        }
+    }
+
+    fn set_sparse_matrix_field(&self, field: &str, value: JsValue) -> Result<(), JsValue> {
+        if value.is_object() {
+            Reflect::set(&self.data, &JsValue::from_str(field), &value)
+                .map(|_| ())
+                .map_err(|_| JsValue::from_str("Failed to set sparse matrix field"))
+        } else {
+            Err(JsValue::from_str("Sparse matrix fields require object values"))
+        }
+    }
+
+    fn set_quantized_field(&self, field: &str, value: JsValue) -> Result<(), JsValue> {
+        if value.is_array() {
+            Reflect::set(&self.data, &JsValue::from_str(field), &value)
+                .map(|_| ())
+                .map_err(|_| JsValue::from_str("Failed to set quantized field"))
+        } else {
+            Err(JsValue::from_str("Quantized fields require array values"))
+        }
+    }
+
+    fn set_gpu_field(&self, field: &str, value: JsValue) -> Result<(), JsValue> {
+        if value.is_object() || value.is_array() {
+            Reflect::set(&self.data, &JsValue::from_str(field), &value)
+                .map(|_| ())
+                .map_err(|_| JsValue::from_str("Failed to set GPU field"))
+        } else {
+            Err(JsValue::from_str("GPU fields require object or array values"))
+        }
+    }
+
+    fn set_simd_field(&self, field: &str, value: JsValue) -> Result<(), JsValue> {
+        if value.is_array() {
+            Reflect::set(&self.data, &JsValue::from_str(field), &value)
+                .map(|_| ())
+                .map_err(|_| JsValue::from_str("Failed to set SIMD field"))
+        } else {
+            Err(JsValue::from_str("SIMD fields require array values"))
         }
     }
 
@@ -173,7 +307,58 @@ impl StrictObject {
                     Err(JsValue::from_str("Nested array elements require object values"))
                 }
             }
-            _ => Err(JsValue::from_str("Invalid array element type")),
+            FieldInfo::Tensor => {
+                if value.is_object() || value.is_array() {
+                    Ok(value)
+                } else {
+                    Err(JsValue::from_str("Tensor array elements require object or array values"))
+                }
+            }
+            FieldInfo::Matrix => {
+                if value.is_object() || value.is_array() {
+                    Ok(value)
+                } else {
+                    Err(JsValue::from_str("Matrix array elements require object or array values"))
+                }
+            }
+            FieldInfo::Vector => {
+                if value.is_array() {
+                    Ok(value)
+                } else {
+                    Err(JsValue::from_str("Vector array elements require array values"))
+                }
+            }
+            FieldInfo::SparseMatrix => {
+                if value.is_object() {
+                    Ok(value)
+                } else {
+                    Err(JsValue::from_str("Sparse matrix array elements require object values"))
+                }
+            }
+            FieldInfo::Quantized => {
+                if value.is_array() {
+                    Ok(value)
+                } else {
+                    Err(JsValue::from_str("Quantized array elements require array values"))
+                }
+            }
+            FieldInfo::GPU => {
+                if value.is_object() || value.is_array() {
+                    Ok(value)
+                } else {
+                    Err(JsValue::from_str("GPU array elements require object or array values"))
+                }
+            }
+            FieldInfo::SIMD => {
+                if value.is_array() {
+                    Ok(value)
+                } else {
+                    Err(JsValue::from_str("SIMD array elements require array values"))
+                }
+            }
+            FieldInfo::Array(_) => {
+                Err(JsValue::from_str("Nested arrays not supported"))
+            }
         }
     }
 
@@ -251,13 +436,18 @@ impl StrictObject {
 
     #[wasm_bindgen(js_name = pushToArray)]
     pub fn push_to_array(&mut self, field: &str, value: JsValue) -> Result<(), JsValue> {
-        if let Some(FieldInfo::Array(element_info)) = self.field_cache.get(field) {
-            let array = self.get_array_field(field)?;
-            let validated_value = self.validate_array_element(element_info, value)?;
-            array.push(&validated_value);
-            Ok(())
+        if let Some(field_info) = self.field_cache.get(field) {
+            match field_info {
+                FieldInfo::Array(element_info) => {
+                    let array = self.get_array_field(field)?;
+                    let validated_value = self.validate_array_element(element_info, value)?;
+                    array.push(&validated_value);
+                    Ok(())
+                }
+                _ => Err(JsValue::from_str(&format!("Field '{}' is not an array", field))),
+            }
         } else {
-            Err(JsValue::from_str(&format!("Field '{}' is not an array", field)))
+            Err(JsValue::from_str(&format!("Field '{}' not found", field)))
         }
     }
 
@@ -347,6 +537,77 @@ impl StrictObject {
         let array = self.get_array_field(field)?;
         Ok(array.length() as usize)
     }
-}
 
+    // AI/ML specific field type checks
+    #[wasm_bindgen(js_name = isTensorField)]
+    pub fn is_tensor_field(&self, field: &str) -> bool {
+        self.schema.is_tensor_field(field)
+    }
+
+    #[wasm_bindgen(js_name = isMatrixField)]
+    pub fn is_matrix_field(&self, field: &str) -> bool {
+        self.schema.is_matrix_field(field)
+    }
+
+    #[wasm_bindgen(js_name = isVectorField)]
+    pub fn is_vector_field(&self, field: &str) -> bool {
+        self.schema.is_vector_field(field)
+    }
+
+    #[wasm_bindgen(js_name = isGPUField)]
+    pub fn is_gpu_field(&self, field: &str) -> bool {
+        self.schema.is_gpu_field(field)
+    }
+
+    #[wasm_bindgen(js_name = isSIMDField)]
+    pub fn is_simd_field(&self, field: &str) -> bool {
+        self.schema.is_simd_field(field)
+    }
+
+    // AI/ML specific getters with validation
+    #[wasm_bindgen(js_name = getTensorField)]
+    pub fn get_tensor_field(&self, field: &str) -> Result<JsValue, JsValue> {
+        if self.is_tensor_field(field) {
+            self.get_field(field)
+        } else {
+            Err(JsValue::from_str(&format!("Field '{}' is not a tensor", field)))
+        }
+    }
+
+    #[wasm_bindgen(js_name = getMatrixField)]
+    pub fn get_matrix_field(&self, field: &str) -> Result<JsValue, JsValue> {
+        if self.is_matrix_field(field) {
+            self.get_field(field)
+        } else {
+            Err(JsValue::from_str(&format!("Field '{}' is not a matrix", field)))
+        }
+    }
+
+    #[wasm_bindgen(js_name = getVectorField)]
+    pub fn get_vector_field(&self, field: &str) -> Result<JsValue, JsValue> {
+        if self.is_vector_field(field) {
+            self.get_field(field)
+        } else {
+            Err(JsValue::from_str(&format!("Field '{}' is not a vector", field)))
+        }
+    }
+
+    #[wasm_bindgen(js_name = getGPUField)]
+    pub fn get_gpu_field(&self, field: &str) -> Result<JsValue, JsValue> {
+        if self.is_gpu_field(field) {
+            self.get_field(field)
+        } else {
+            Err(JsValue::from_str(&format!("Field '{}' is not a GPU field", field)))
+        }
+    }
+
+    #[wasm_bindgen(js_name = getSIMDField)]
+    pub fn get_simd_field(&self, field: &str) -> Result<JsValue, JsValue> {
+        if self.is_simd_field(field) {
+            self.get_field(field)
+        } else {
+            Err(JsValue::from_str(&format!("Field '{}' is not a SIMD field", field)))
+        }
+    }
+}
 

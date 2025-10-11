@@ -519,3 +519,4 @@ pub fn get_available_gpu_types() -> js_sys::Array {
         .map(JsValue::from)
         .collect()
 }
+
