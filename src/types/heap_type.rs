@@ -1,5 +1,4 @@
 
-// src/types/heap_type.rs
 use js_sys::{Array, ArrayBuffer, Object, Uint8Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -31,6 +30,44 @@ pub enum HeapType {
     Undefined,
     Symbol,
     
+    // === AI/ML ENHANCEMENTS ===
+    
+    // Tensor types (multi-dimensional arrays)
+    TensorF32,    // Float32 tensor
+    TensorF64,    // Float64 tensor  
+    TensorI32,    // Int32 tensor
+    TensorU8,     // Uint8 tensor (quantized models)
+    TensorI8,     // Int8 tensor (quantized models)
+    TensorI16,    // Int16 tensor
+    TensorU16,    // Uint16 tensor
+    
+    // Matrix types (2D specialized)
+    MatrixF32,    // Float32 matrix
+    MatrixF64,    // Float64 matrix
+    MatrixC32,    // Complex32 matrix
+    MatrixC64,    // Complex64 matrix
+    
+    // Vector types (1D specialized)
+    VectorF32,    // Float32 vector
+    VectorF64,    // Float64 vector
+    VectorI32,    // Int32 vector
+    
+    // Specialized ML types
+    SparseMatrix, // Sparse matrix for large, sparse data
+    Quantized8,   // 8-bit quantized data
+    Quantized16,  // 16-bit quantized data
+    Embedding,    // Embedding vectors
+    Attention,    // Attention mechanism data
+    
+    // Neural network specific
+    WeightF32,    // Neural network weights
+    BiasF32,      // Neural network biases
+    GradientF32,  // Training gradients
+    Activation,   // Activation function data
+    
+    // GPU/SIMD integration
+    GPUTensor,    // GPU-accelerated tensor
+    SIMDVector,   // SIMD-optimized vector
 }
 
 
@@ -478,6 +515,70 @@ impl JsHeapType {
     pub fn is_more_capable_than(&self, other: &JsHeapType) -> bool {
         self.0.capabilities().count() > other.0.capabilities().count()
     }
+
+    // === AI/ML ENHANCEMENTS ===
+    
+    #[wasm_bindgen(js_name = isTensorType)]
+    pub fn is_tensor_type(&self) -> bool {
+        self.0.is_tensor_type()
+    }
+
+    #[wasm_bindgen(js_name = isMatrixType)]
+    pub fn is_matrix_type(&self) -> bool {
+        self.0.is_matrix_type()
+    }
+
+    #[wasm_bindgen(js_name = isVectorType)]
+    pub fn is_vector_type(&self) -> bool {
+        self.0.is_vector_type()
+    }
+
+    #[wasm_bindgen(js_name = isNeuralNetworkType)]
+    pub fn is_neural_network_type(&self) -> bool {
+        self.0.is_neural_network_type()
+    }
+
+    #[wasm_bindgen(js_name = isQuantizedType)]
+    pub fn is_quantized_type(&self) -> bool {
+        self.0.is_quantized_type()
+    }
+
+    #[wasm_bindgen(js_name = isSparseType)]
+    pub fn is_sparse_type(&self) -> bool {
+        self.0.is_sparse_type()
+    }
+
+    #[wasm_bindgen(js_name = getMLOperations)]
+    pub fn get_ml_operations(&self) -> Array {
+        self.0.get_ml_operations()
+            .into_iter()
+            .map(JsValue::from)
+            .collect()
+    }
+
+    #[wasm_bindgen(js_name = getPrecisionInfo)]
+    pub fn get_precision_info(&self) -> JsValue {
+        let (min, max) = self.0.precision_info();
+        let obj = Object::new();
+        js_sys::Reflect::set(&obj, &"min".into(), &min.into()).unwrap();
+        js_sys::Reflect::set(&obj, &"max".into(), &max.into()).unwrap();
+        obj.into()
+    }
+
+    #[wasm_bindgen(js_name = getRecommendedBackend)]
+    pub fn get_recommended_backend(&self) -> String {
+        self.0.recommended_backend().to_string()
+    }
+
+    #[wasm_bindgen(js_name = getOptimalLayout)]
+    pub fn get_optimal_layout(&self) -> String {
+        self.0.optimal_layout().to_string()
+    }
+
+    #[wasm_bindgen(js_name = estimateMemoryFootprint)]
+    pub fn estimate_memory_footprint(&self, element_count: usize) -> usize {
+        self.0.memory_footprint(element_count)
+    }
 }
 
 impl HeapType {
@@ -564,6 +665,105 @@ impl HeapType {
             HeapType::Symbol => {
                 TypeCapabilities::CLONEABLE
             }
+
+            // === AI/ML TYPE CAPABILITIES ===
+            
+            // Tensor types - support numeric ops, iteration, and transfer
+            HeapType::TensorF32 | HeapType::TensorF64 | HeapType::TensorI32 |
+            HeapType::TensorU8 | HeapType::TensorI8 | HeapType::TensorI16 | HeapType::TensorU16 => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+                    .union(TypeCapabilities::POOLABLE)
+                    .union(TypeCapabilities::TYPED_ARRAY)
+                    .union(TypeCapabilities::INLINE_OPTIMIZABLE)
+            }
+            
+            // Matrix types - optimized for linear algebra
+            HeapType::MatrixF32 | HeapType::MatrixF64 | 
+            HeapType::MatrixC32 | HeapType::MatrixC64 => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+                    .union(TypeCapabilities::POOLABLE)
+                    .union(TypeCapabilities::INLINE_OPTIMIZABLE)
+            }
+            
+            // Vector types - optimized for SIMD
+            HeapType::VectorF32 | HeapType::VectorF64 | HeapType::VectorI32 => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+                    .union(TypeCapabilities::POOLABLE)
+                    .union(TypeCapabilities::INLINE_OPTIMIZABLE)
+            }
+            
+            // Specialized ML types
+            HeapType::SparseMatrix => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+                    .union(TypeCapabilities::POOLABLE)
+                    .union(TypeCapabilities::LAZY_LOADABLE)
+            }
+            
+            HeapType::Quantized8 | HeapType::Quantized16 => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+                    .union(TypeCapabilities::POOLABLE)
+                    .union(TypeCapabilities::INLINE_OPTIMIZABLE)
+            }
+            
+            // Neural network types
+            HeapType::WeightF32 | HeapType::BiasF32 | HeapType::GradientF32 => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+                    .union(TypeCapabilities::POOLABLE)
+                    .union(TypeCapabilities::INLINE_OPTIMIZABLE)
+            }
+            
+            HeapType::Embedding | HeapType::Attention => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+                    .union(TypeCapabilities::POOLABLE)
+            }
+            
+            HeapType::Activation => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+            }
+            
+            // GPU/SIMD integration
+            HeapType::GPUTensor => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+                    .union(TypeCapabilities::POOLABLE)
+                    .union(TypeCapabilities::TYPED_ARRAY)
+                    .union(TypeCapabilities::ARRAY_BUFFER)
+            }
+            
+            HeapType::SIMDVector => {
+                TypeCapabilities::all_numeric()
+                    .union(TypeCapabilities::ITERABLE)
+                    .union(TypeCapabilities::INDEXABLE)
+                    .union(TypeCapabilities::TRANSFERABLE)
+                    .union(TypeCapabilities::POOLABLE)
+                    .union(TypeCapabilities::INLINE_OPTIMIZABLE)
+            }
         }
     }
 
@@ -635,6 +835,44 @@ impl HeapType {
             // Buffer operations
             "sliceBuffer" | "subarray" | "setValues" => 
                 caps.contains(TypeCapabilities::TYPED_ARRAY),
+            
+            // === AI/ML OPERATIONS ===
+            
+            // Tensor operations
+            "reshape" | "transpose" | "broadcast"  => 
+                self.is_tensor_type() || self.is_matrix_type(),
+            
+            // Matrix operations  
+            "matmul" | "inverse" | "determinant" | "eigen" | "svd" | "cholesky" =>
+                self.is_matrix_type(),
+                
+            // Vector operations
+            "dot" | "cross" | "norm" | "normalize" | "distance" =>
+                self.is_vector_type(),
+                
+            // Neural network operations
+            "convolution" | "pooling" | "activation" | "batchnorm" | "dropout" =>
+                self.is_neural_network_type(),
+                
+            // Optimization operations
+            "gradient" | "backward" | "update" | "regularize" =>
+                self.is_training_type(),
+                
+            // Quantization operations
+            "quantize" | "dequantize" | "fake_quant" =>
+                self.is_quantized_type(),
+                
+            // Sparse operations
+            "sparse_dense_matmul" | "sparse_add" | "sparse_convolution" =>
+                matches!(self, HeapType::SparseMatrix),
+                
+            // GPU operations
+            "gpu_upload" | "gpu_download" | "gpu_kernel" =>
+                matches!(self, HeapType::GPUTensor),
+                
+            // SIMD operations
+            "simd_add" | "simd_mul" | "simd_dot" | "simd_normalize" =>
+                matches!(self, HeapType::SIMDVector),
             
             _ => false,
         }
@@ -723,6 +961,17 @@ impl HeapType {
             ops.extend(&["get", "set", "has"]);
         }
         
+        // Add AI/ML specific operations
+        if self.is_tensor_type() {
+            ops.extend(&["reshape", "transpose", "slice", "concat"]);
+        }
+        if self.is_matrix_type() {
+            ops.extend(&["matmul", "inverse", "determinant"]);
+        }
+        if self.is_vector_type() {
+            ops.extend(&["dot", "cross", "norm", "normalize"]);
+        }
+        
         ops
     }
 
@@ -749,6 +998,15 @@ impl HeapType {
             (HeapType::U8, _) | (_, HeapType::U8) => Some(HeapType::U8),
             (HeapType::I8, _) | (_, HeapType::I8) => Some(HeapType::I8),
             (HeapType::Number, _) | (_, HeapType::Number) => Some(HeapType::Number),
+            
+            // AI/ML type promotions
+            (HeapType::TensorF64, _) | (_, HeapType::TensorF64) => Some(HeapType::TensorF64),
+            (HeapType::TensorF32, _) | (_, HeapType::TensorF32) => Some(HeapType::TensorF32),
+            (HeapType::MatrixF64, _) | (_, HeapType::MatrixF64) => Some(HeapType::MatrixF64),
+            (HeapType::MatrixF32, _) | (_, HeapType::MatrixF32) => Some(HeapType::MatrixF32),
+            (HeapType::VectorF64, _) | (_, HeapType::VectorF64) => Some(HeapType::VectorF64),
+            (HeapType::VectorF32, _) | (_, HeapType::VectorF32) => Some(HeapType::VectorF32),
+            
             _ => None,
         }
     }
@@ -768,6 +1026,25 @@ impl HeapType {
             | HeapType::Date
             | HeapType::Buffer => 8,
             HeapType::Null | HeapType::Undefined | HeapType::Symbol => 0,
+
+            // === AI/ML TYPES ===
+            
+            HeapType::TensorF32 | HeapType::MatrixF32 | HeapType::VectorF32 | 
+            HeapType::WeightF32 | HeapType::BiasF32 | HeapType::GradientF32 | 
+            HeapType::Activation | HeapType::Embedding | HeapType::Attention => 4,
+            
+            HeapType::TensorF64 | HeapType::MatrixF64 | HeapType::VectorF64 |
+            HeapType::MatrixC64 => 8,
+            
+            HeapType::TensorI32 | HeapType::VectorI32 | HeapType::MatrixC32 => 4,
+            HeapType::TensorU8 | HeapType::Quantized8 => 1,
+            HeapType::TensorI8 => 1,
+            HeapType::TensorU16 | HeapType::Quantized16 => 2,
+            HeapType::TensorI16 => 2,
+            
+            HeapType::SparseMatrix => 8, // indices + values
+            HeapType::GPUTensor => 16,   // GPU memory alignment
+            HeapType::SIMDVector => 16,  // SIMD alignment
         }
     }
 
@@ -799,6 +1076,15 @@ impl HeapType {
                 | HeapType::Map
                 | HeapType::Date
                 | HeapType::Buffer
+                // AI/ML complex types
+                | HeapType::TensorF32 | HeapType::TensorF64 | HeapType::TensorI32
+                | HeapType::TensorU8 | HeapType::TensorI8 | HeapType::TensorI16 | HeapType::TensorU16
+                | HeapType::MatrixF32 | HeapType::MatrixF64 | HeapType::MatrixC32 | HeapType::MatrixC64
+                | HeapType::VectorF32 | HeapType::VectorF64 | HeapType::VectorI32
+                | HeapType::SparseMatrix | HeapType::Quantized8 | HeapType::Quantized16
+                | HeapType::Embedding | HeapType::Attention
+                | HeapType::WeightF32 | HeapType::BiasF32 | HeapType::GradientF32 | HeapType::Activation
+                | HeapType::GPUTensor | HeapType::SIMDVector
         )
     }
 
@@ -816,6 +1102,14 @@ impl HeapType {
                 | HeapType::F32
                 | HeapType::F64
                 | HeapType::Number
+                // AI/ML numeric types
+                | HeapType::TensorF32 | HeapType::TensorF64 | HeapType::TensorI32
+                | HeapType::TensorU8 | HeapType::TensorI8 | HeapType::TensorI16 | HeapType::TensorU16
+                | HeapType::MatrixF32 | HeapType::MatrixF64 | HeapType::MatrixC32 | HeapType::MatrixC64
+                | HeapType::VectorF32 | HeapType::VectorF64 | HeapType::VectorI32
+                | HeapType::SparseMatrix | HeapType::Quantized8 | HeapType::Quantized16
+                | HeapType::Embedding | HeapType::Attention
+                | HeapType::WeightF32 | HeapType::BiasF32 | HeapType::GradientF32 | HeapType::Activation
         )
     }
 
@@ -844,6 +1138,34 @@ impl HeapType {
             "null" => Ok(HeapType::Null),
             "undefined" => Ok(HeapType::Undefined),
             "symbol" => Ok(HeapType::Symbol),
+            
+            // === AI/ML TYPES ===
+            "tensor_f32" => Ok(HeapType::TensorF32),
+            "tensor_f64" => Ok(HeapType::TensorF64),
+            "tensor_i32" => Ok(HeapType::TensorI32),
+            "tensor_u8" => Ok(HeapType::TensorU8),
+            "tensor_i8" => Ok(HeapType::TensorI8),
+            "tensor_i16" => Ok(HeapType::TensorI16),
+            "tensor_u16" => Ok(HeapType::TensorU16),
+            "matrix_f32" => Ok(HeapType::MatrixF32),
+            "matrix_f64" => Ok(HeapType::MatrixF64),
+            "matrix_c32" => Ok(HeapType::MatrixC32),
+            "matrix_c64" => Ok(HeapType::MatrixC64),
+            "vector_f32" => Ok(HeapType::VectorF32),
+            "vector_f64" => Ok(HeapType::VectorF64),
+            "vector_i32" => Ok(HeapType::VectorI32),
+            "sparse_matrix" => Ok(HeapType::SparseMatrix),
+            "quantized8" => Ok(HeapType::Quantized8),
+            "quantized16" => Ok(HeapType::Quantized16),
+            "embedding" => Ok(HeapType::Embedding),
+            "attention" => Ok(HeapType::Attention),
+            "weight_f32" => Ok(HeapType::WeightF32),
+            "bias_f32" => Ok(HeapType::BiasF32),
+            "gradient_f32" => Ok(HeapType::GradientF32),
+            "activation" => Ok(HeapType::Activation),
+            "gpu_tensor" => Ok(HeapType::GPUTensor),
+            "simd_vector" => Ok(HeapType::SIMDVector),
+            
             _ => Err(JsValue::from_str(&format!("Unknown type: {}", type_str))),
         }
     }
@@ -873,6 +1195,33 @@ impl HeapType {
             HeapType::Null => "null",
             HeapType::Undefined => "undefined",
             HeapType::Symbol => "symbol",
+            
+            // === AI/ML TYPES ===
+            HeapType::TensorF32 => "tensor_f32",
+            HeapType::TensorF64 => "tensor_f64",
+            HeapType::TensorI32 => "tensor_i32",
+            HeapType::TensorU8 => "tensor_u8",
+            HeapType::TensorI8 => "tensor_i8",
+            HeapType::TensorI16 => "tensor_i16",
+            HeapType::TensorU16 => "tensor_u16",
+            HeapType::MatrixF32 => "matrix_f32",
+            HeapType::MatrixF64 => "matrix_f64",
+            HeapType::MatrixC32 => "matrix_c32",
+            HeapType::MatrixC64 => "matrix_c64",
+            HeapType::VectorF32 => "vector_f32",
+            HeapType::VectorF64 => "vector_f64",
+            HeapType::VectorI32 => "vector_i32",
+            HeapType::SparseMatrix => "sparse_matrix",
+            HeapType::Quantized8 => "quantized8",
+            HeapType::Quantized16 => "quantized16",
+            HeapType::Embedding => "embedding",
+            HeapType::Attention => "attention",
+            HeapType::WeightF32 => "weight_f32",
+            HeapType::BiasF32 => "bias_f32",
+            HeapType::GradientF32 => "gradient_f32",
+            HeapType::Activation => "activation",
+            HeapType::GPUTensor => "gpu_tensor",
+            HeapType::SIMDVector => "simd_vector",
         }
         .to_string()
     }
@@ -902,6 +1251,33 @@ impl HeapType {
             HeapType::Null => JsValue::from_str("null"),
             HeapType::Undefined => JsValue::from_str("undefined"),
             HeapType::Symbol => JsValue::from_str("symbol"),
+            
+            // === AI/ML TYPES ===
+            HeapType::TensorF32 => JsValue::from_str("tensor_f32"),
+            HeapType::TensorF64 => JsValue::from_str("tensor_f64"),
+            HeapType::TensorI32 => JsValue::from_str("tensor_i32"),
+            HeapType::TensorU8 => JsValue::from_str("tensor_u8"),
+            HeapType::TensorI8 => JsValue::from_str("tensor_i8"),
+            HeapType::TensorI16 => JsValue::from_str("tensor_i16"),
+            HeapType::TensorU16 => JsValue::from_str("tensor_u16"),
+            HeapType::MatrixF32 => JsValue::from_str("matrix_f32"),
+            HeapType::MatrixF64 => JsValue::from_str("matrix_f64"),
+            HeapType::MatrixC32 => JsValue::from_str("matrix_c32"),
+            HeapType::MatrixC64 => JsValue::from_str("matrix_c64"),
+            HeapType::VectorF32 => JsValue::from_str("vector_f32"),
+            HeapType::VectorF64 => JsValue::from_str("vector_f64"),
+            HeapType::VectorI32 => JsValue::from_str("vector_i32"),
+            HeapType::SparseMatrix => JsValue::from_str("sparse_matrix"),
+            HeapType::Quantized8 => JsValue::from_str("quantized8"),
+            HeapType::Quantized16 => JsValue::from_str("quantized16"),
+            HeapType::Embedding => JsValue::from_str("embedding"),
+            HeapType::Attention => JsValue::from_str("attention"),
+            HeapType::WeightF32 => JsValue::from_str("weight_f32"),
+            HeapType::BiasF32 => JsValue::from_str("bias_f32"),
+            HeapType::GradientF32 => JsValue::from_str("gradient_f32"),
+            HeapType::Activation => JsValue::from_str("activation"),
+            HeapType::GPUTensor => JsValue::from_str("gpu_tensor"),
+            HeapType::SIMDVector => JsValue::from_str("simd_vector"),
         }
     }
 
@@ -957,6 +1333,24 @@ impl HeapType {
             | HeapType::Date
             | HeapType::Buffer => 0.0, 
             HeapType::Null | HeapType::Undefined | HeapType::Symbol => 0.0,
+            
+            // === AI/ML TYPES ===
+            HeapType::TensorF32 | HeapType::MatrixF32 | HeapType::VectorF32 | 
+            HeapType::WeightF32 | HeapType::BiasF32 | HeapType::GradientF32 | 
+            HeapType::Activation | HeapType::Embedding | HeapType::Attention => 0.0,
+            
+            HeapType::TensorF64 | HeapType::MatrixF64 | HeapType::VectorF64 |
+            HeapType::MatrixC64 => 0.0,
+            
+            HeapType::TensorI32 | HeapType::VectorI32 | HeapType::MatrixC32 => 0.0,
+            HeapType::TensorU8 | HeapType::Quantized8 => 0.0,
+            HeapType::TensorI8 => 0.0,
+            HeapType::TensorU16 | HeapType::Quantized16 => 0.0,
+            HeapType::TensorI16 => 0.0,
+            
+            HeapType::SparseMatrix => 0.0,
+            HeapType::GPUTensor => 0.0,
+            HeapType::SIMDVector => 0.0,
         }
     }
 
@@ -985,6 +1379,19 @@ impl HeapType {
             | HeapType::Date
             | HeapType::Buffer => 8,
             HeapType::Null | HeapType::Undefined | HeapType::Symbol => 1,
+
+            // === AI/ML TYPES - optimized alignments ===
+            HeapType::TensorF32 | HeapType::MatrixF32 | HeapType::VectorF32 => 16,
+            HeapType::TensorF64 | HeapType::MatrixF64 | HeapType::VectorF64 => 16,
+            HeapType::TensorI32 | HeapType::VectorI32 | HeapType::MatrixC32 => 16,
+            HeapType::TensorU8 | HeapType::Quantized8 | HeapType::TensorI8 => 1,
+            HeapType::TensorU16 | HeapType::Quantized16 | HeapType::TensorI16 => 2,
+            HeapType::MatrixC64 => 16,
+            HeapType::SparseMatrix => 8,
+            HeapType::Embedding | HeapType::Attention => 16,
+            HeapType::WeightF32 | HeapType::BiasF32 | HeapType::GradientF32 | HeapType::Activation => 16,
+            HeapType::GPUTensor => 256,  // GPU page alignment
+            HeapType::SIMDVector => 32,  // AVX2 alignment
         }
     }
 
@@ -1002,5 +1409,136 @@ impl HeapType {
 
     pub fn requires_managed_memory(&self) -> bool {
         self.is_complex() || matches!(self, HeapType::Any)
+    }
+
+    // === AI/ML ENHANCEMENTS ===
+    
+    pub fn is_tensor_type(&self) -> bool {
+        matches!(self,
+            HeapType::TensorF32 | HeapType::TensorF64 | HeapType::TensorI32 |
+            HeapType::TensorU8 | HeapType::TensorI8 | HeapType::TensorI16 | HeapType::TensorU16
+        )
+    }
+    
+    pub fn is_matrix_type(&self) -> bool {
+        matches!(self,
+            HeapType::MatrixF32 | HeapType::MatrixF64 | 
+            HeapType::MatrixC32 | HeapType::MatrixC64
+        )
+    }
+    
+    pub fn is_vector_type(&self) -> bool {
+        matches!(self,
+            HeapType::VectorF32 | HeapType::VectorF64 | HeapType::VectorI32
+        )
+    }
+    
+    pub fn is_neural_network_type(&self) -> bool {
+        matches!(self,
+            HeapType::WeightF32 | HeapType::BiasF32 | HeapType::GradientF32 | HeapType::Activation
+        )
+    }
+    
+    pub fn is_training_type(&self) -> bool {
+        matches!(self, HeapType::GradientF32)
+    }
+    
+    pub fn is_quantized_type(&self) -> bool {
+        matches!(self, HeapType::Quantized8 | HeapType::Quantized16)
+    }
+    
+    pub fn is_sparse_type(&self) -> bool {
+        matches!(self, HeapType::SparseMatrix)
+    }
+    
+    // === AI/ML SPECIFIC PROPERTIES ===
+    
+    pub fn recommended_backend(&self) -> &'static str {
+        match self {
+            // GPU-accelerated types
+            HeapType::TensorF32 | HeapType::TensorF64 | HeapType::GPUTensor => "gpu",
+            // SIMD-optimized types  
+            HeapType::VectorF32 | HeapType::VectorF64 | HeapType::SIMDVector => "simd",
+            // CPU-optimized types
+            HeapType::MatrixF32 | HeapType::MatrixF64 => "cpu_blas",
+            // Memory-efficient types
+            HeapType::SparseMatrix | HeapType::Quantized8 | HeapType::Quantized16 => "memory",
+            // Default
+            _ => "auto",
+        }
+    }
+    
+    pub fn optimal_layout(&self) -> &'static str {
+        match self {
+            HeapType::TensorF32 | HeapType::TensorF64 => "strided",
+            HeapType::MatrixF32 | HeapType::MatrixF64 => "column_major",
+            HeapType::VectorF32 | HeapType::VectorF64 => "contiguous",
+            HeapType::SparseMatrix => "csr",
+            _ => "contiguous",
+        }
+    }
+    
+    pub fn memory_footprint(&self, element_count: usize) -> usize {
+        let element_size = self.element_size();
+        match self {
+            HeapType::SparseMatrix => (element_count * element_size) / 10, // Assume 90% sparsity
+            HeapType::Quantized8 => element_count * 1,
+            HeapType::Quantized16 => element_count * 2,
+            _ => element_count * element_size,
+        }
+    }
+    
+    // === AI/ML OPERATION COMPATIBILITY ===
+    
+    pub fn get_ml_operations(&self) -> Vec<&'static str> {
+        let mut ops = Vec::new();
+        
+        if self.is_tensor_type() {
+            ops.extend(&["reshape", "transpose", "slice", "concat", "broadcast"]);
+        }
+        
+        if self.is_matrix_type() {
+            ops.extend(&["matmul", "inverse", "determinant", "eigen", "svd"]);
+        }
+        
+        if self.is_vector_type() {
+            ops.extend(&["dot", "cross", "norm", "normalize", "distance"]);
+        }
+        
+        if self.is_neural_network_type() {
+            ops.extend(&["convolution", "pooling", "activation", "batchnorm"]);
+        }
+        
+        if self.is_quantized_type() {
+            ops.extend(&["quantize", "dequantize", "fake_quant"]);
+        }
+        
+        if self.is_sparse_type() {
+            ops.extend(&["sparse_dense_matmul", "sparse_add"]);
+        }
+        
+        ops
+    }
+    
+    // === PRECISION AND RANGE INFO ===
+    
+    pub fn precision_info(&self) -> (f64, f64) {
+        match self {
+            HeapType::TensorF32 | HeapType::MatrixF32 | HeapType::VectorF32 | HeapType::WeightF32 => 
+                (f32::MIN as f64, f32::MAX as f64),
+            HeapType::TensorF64 | HeapType::MatrixF64 | HeapType::VectorF64 => 
+                (f64::MIN, f64::MAX),
+            HeapType::TensorI32 | HeapType::VectorI32 => 
+                (i32::MIN as f64, i32::MAX as f64),
+            HeapType::TensorU8 | HeapType::Quantized8 => 
+                (0.0, 255.0),
+            HeapType::TensorI8 => 
+                (-128.0, 127.0),
+            HeapType::TensorU16 | HeapType::Quantized16 => 
+                (0.0, 65535.0),
+            HeapType::TensorI16 => 
+                (-32768.0, 32767.0),
+            _ => (0.0, 1.0),
+        }
     }
 }

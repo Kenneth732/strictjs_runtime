@@ -1,3 +1,5 @@
+
+// src/types/gpu_types.rs
 use wasm_bindgen::prelude::*;
 use super::HeapType;
 
@@ -323,7 +325,6 @@ impl GPUType {
     }
 }
 
-// Internal struct for type info
 #[derive(Clone, Debug)]
 pub struct GPUTypeInfo {
     pub element_size: usize,
@@ -345,14 +346,12 @@ impl MemoryLayout {
     }
 }
 
-// Integration with existing HeapType system
 impl From<GPUType> for HeapType {
     fn from(gpu_type: GPUType) -> Self {
         gpu_type.get_heap_type()
     }
 }
 
-// GPU memory management utilities
 #[wasm_bindgen]
 pub struct GPUMemoryManager {
     buffers: std::collections::HashMap<usize, GPUBufferInfo>,

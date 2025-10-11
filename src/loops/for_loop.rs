@@ -135,6 +135,7 @@ impl StrictForLoop {
             HeapType::Symbol => value,
             HeapType::Null => value,
             HeapType::Undefined => value,
+            _ => value, // fallback for new types
         }
     }
 }

@@ -30,7 +30,34 @@ pub enum Num {
     
     Null,
     Undefined,
-    Symbol(u32),     
+    Symbol(u32),
+    
+    // === AI/ML TYPES ===
+    TensorF32(u32),
+    TensorF64(u32),
+    TensorI32(u32),
+    TensorU8(u32),
+    TensorI8(u32),
+    TensorI16(u32),
+    TensorU16(u32),
+    MatrixF32(u32),
+    MatrixF64(u32),
+    MatrixC32(u32),
+    MatrixC64(u32),
+    VectorF32(u32),
+    VectorF64(u32),
+    VectorI32(u32),
+    SparseMatrix(u32),
+    Quantized8(u32),
+    Quantized16(u32),
+    Embedding(u32),
+    Attention(u32),
+    WeightF32(u32),
+    BiasF32(u32),
+    GradientF32(u32),
+    Activation(u32),
+    GPUTensor(u32),
+    SIMDVector(u32),
 }
 
 impl Num {
@@ -61,6 +88,33 @@ impl Num {
             HeapType::Null => Num::Null,
             HeapType::Undefined => Num::Undefined,
             HeapType::Symbol => Num::Symbol(v as u32),
+            
+            // === AI/ML TYPES ===
+            HeapType::TensorF32 => Num::TensorF32(v as u32),
+            HeapType::TensorF64 => Num::TensorF64(v as u32),
+            HeapType::TensorI32 => Num::TensorI32(v as u32),
+            HeapType::TensorU8 => Num::TensorU8(v as u32),
+            HeapType::TensorI8 => Num::TensorI8(v as u32),
+            HeapType::TensorI16 => Num::TensorI16(v as u32),
+            HeapType::TensorU16 => Num::TensorU16(v as u32),
+            HeapType::MatrixF32 => Num::MatrixF32(v as u32),
+            HeapType::MatrixF64 => Num::MatrixF64(v as u32),
+            HeapType::MatrixC32 => Num::MatrixC32(v as u32),
+            HeapType::MatrixC64 => Num::MatrixC64(v as u32),
+            HeapType::VectorF32 => Num::VectorF32(v as u32),
+            HeapType::VectorF64 => Num::VectorF64(v as u32),
+            HeapType::VectorI32 => Num::VectorI32(v as u32),
+            HeapType::SparseMatrix => Num::SparseMatrix(v as u32),
+            HeapType::Quantized8 => Num::Quantized8(v as u32),
+            HeapType::Quantized16 => Num::Quantized16(v as u32),
+            HeapType::Embedding => Num::Embedding(v as u32),
+            HeapType::Attention => Num::Attention(v as u32),
+            HeapType::WeightF32 => Num::WeightF32(v as u32),
+            HeapType::BiasF32 => Num::BiasF32(v as u32),
+            HeapType::GradientF32 => Num::GradientF32(v as u32),
+            HeapType::Activation => Num::Activation(v as u32),
+            HeapType::GPUTensor => Num::GPUTensor(v as u32),
+            HeapType::SIMDVector => Num::SIMDVector(v as u32),
         }
     }
 
@@ -93,6 +147,33 @@ impl Num {
             Num::Null => 0.0,
             Num::Undefined => 0.0,
             Num::Symbol(idx) => *idx as f64,
+            
+            // === AI/ML TYPES ===
+            Num::TensorF32(idx) => *idx as f64,
+            Num::TensorF64(idx) => *idx as f64,
+            Num::TensorI32(idx) => *idx as f64,
+            Num::TensorU8(idx) => *idx as f64,
+            Num::TensorI8(idx) => *idx as f64,
+            Num::TensorI16(idx) => *idx as f64,
+            Num::TensorU16(idx) => *idx as f64,
+            Num::MatrixF32(idx) => *idx as f64,
+            Num::MatrixF64(idx) => *idx as f64,
+            Num::MatrixC32(idx) => *idx as f64,
+            Num::MatrixC64(idx) => *idx as f64,
+            Num::VectorF32(idx) => *idx as f64,
+            Num::VectorF64(idx) => *idx as f64,
+            Num::VectorI32(idx) => *idx as f64,
+            Num::SparseMatrix(idx) => *idx as f64,
+            Num::Quantized8(idx) => *idx as f64,
+            Num::Quantized16(idx) => *idx as f64,
+            Num::Embedding(idx) => *idx as f64,
+            Num::Attention(idx) => *idx as f64,
+            Num::WeightF32(idx) => *idx as f64,
+            Num::BiasF32(idx) => *idx as f64,
+            Num::GradientF32(idx) => *idx as f64,
+            Num::Activation(idx) => *idx as f64,
+            Num::GPUTensor(idx) => *idx as f64,
+            Num::SIMDVector(idx) => *idx as f64,
         }
     }
 
@@ -110,8 +191,6 @@ impl Num {
         }
     }
 }
-
-
 
 
 
