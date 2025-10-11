@@ -1,20 +1,18 @@
 use wasm_bindgen::prelude::*;
 use super::HeapType;
 
-// Use simple enum without wasm_bindgen for the core type
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum GPUType {
-    TensorF32,    // Tensor of f32
-    TensorI32,    // Tensor of i32
-    TensorU32,    // Tensor of u32
-    MatrixF32,    // 2D matrix
-    MatrixF64,    // Double precision matrix
-    VectorF32,    // 3D/4D vectors
-    ImageRGBA,    // Image data
-    ComputeBuffer,// General compute buffer
+    TensorF32,    
+    TensorI32,    
+    TensorU32,    
+    MatrixF32,
+    MatrixF64,    
+    VectorF32,    
+    ImageRGBA, 
+    ComputeBuffer,
 }
 
-// Use simple enum for memory layout
 #[derive(Clone, Copy, Debug)]
 pub enum MemoryLayout {
     Linear,
@@ -25,7 +23,6 @@ pub enum MemoryLayout {
     Channels,
 }
 
-// Create a wasm-bindgen compatible struct for JS interaction
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct JsGPUType {
@@ -133,7 +130,6 @@ impl JsGPUType {
     }
 }
 
-// Internal implementation for GPUType
 impl GPUType {
     pub fn get_info(&self) -> GPUTypeInfo {
         match self {
