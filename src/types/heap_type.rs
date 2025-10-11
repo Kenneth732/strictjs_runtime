@@ -30,6 +30,7 @@ pub enum HeapType {
     Null,
     Undefined,
     Symbol,
+    
 }
 
 
@@ -1003,4 +1004,3 @@ impl HeapType {
         self.is_complex() || matches!(self, HeapType::Any)
     }
 }
-

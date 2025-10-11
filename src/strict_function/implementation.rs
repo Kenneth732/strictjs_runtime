@@ -203,7 +203,6 @@ impl StrictFunction {
         let arg_type = self.arg_types[index];
         let capabilities = arg_type.capabilities();
         
-        // Use capabilities for smarter type conversion
         if capabilities.contains(TypeCapabilities::NUMERIC_OPS) {
             self.convert_to_numeric(arg_val, arg_type, index)
         } else if capabilities.contains(TypeCapabilities::STRING_OPS) {
@@ -211,7 +210,6 @@ impl StrictFunction {
         } else if capabilities.contains(TypeCapabilities::ITERABLE) {
             self.convert_to_iterable(arg_val, arg_type, index)
         } else {
-            // Strict type checking for non-convertible types
             self.validate_strict_type(arg_val, arg_type, index)
         }
     }
