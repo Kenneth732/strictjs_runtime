@@ -3,689 +3,221 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StrictLLM - Browser Language Model</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 20px;
-      background: #0f0f23;
-      color: #00ff00;
-    }
-    .container {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      margin-top: 20px;
-    }
-    .chat-area, .performance-area {
-      background: #1a1a2e;
-      border: 1px solid #00ff00;
-      border-radius: 10px;
-      padding: 20px;
-    }
-    textarea {
-      width: 100%;
-      height: 100px;
-      background: #0f0f23;
-      color: #00ff00;
-      border: 1px solid #00ff00;
-      border-radius: 5px;
-      padding: 10px;
-      font-family: monospace;
-    }
-    button {
-      background: #00ff00;
-      color: #0f0f23;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-weight: bold;
-      margin: 10px 0;
-    }
-    button:disabled {
-      background: #555;
-      cursor: not-allowed;
-    }
-    .message {
-      margin: 10px 0;
-      padding: 10px;
-      border-radius: 5px;
-    }
-    .user-message {
-      background: #16213e;
-      border-left: 3px solid #00ff00;
-    }
-    .ai-message {
-      background: #0f3460;
-      border-left: 3px solid #00ffff;
-    }
-    .performance-metrics {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .metric {
-      background: #16213e;
-      padding: 10px;
-      border-radius: 5px;
-      text-align: center;
-    }
-    .metric-value {
-      font-size: 1.5em;
-      font-weight: bold;
-      color: #00ffff;
-    }
-    .progress-bar {
-      width: 100%;
-      height: 20px;
-      background: #0f0f23;
-      border-radius: 10px;
-      overflow: hidden;
-      margin: 10px 0;
-    }
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #00ff00, #00ffff);
-      transition: width 0.3s ease;
-    }
-    .system-status {
-      margin-top: 15px;
-    }
-    .status-item {
-      padding: 5px 0;
-      border-bottom: 1px solid #00ff00;
-    }
-  </style>
+  <title>StrictJS Runtime Demo</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>🚀 StrictLLM - Browser Language Model</h1>
-  <p>Running entirely in your browser with GPU/SIMD acceleration</p>
-  
   <div class="container">
-    <div class="chat-area">
-      <h2>💬 Chat Interface</h2>
-      <textarea id="promptInput" placeholder="Ask me anything..."></textarea>
-      <br>
-      <button id="generateBtn">Generate Response</button>
-      <button id="stopBtn" disabled>Stop</button>
-      
-      <div id="chatHistory"></div>
-    </div>
-    
-    <div class="performance-area">
-      <h2>📊 Performance Metrics</h2>
-      <div class="performance-metrics">
-        <div class="metric">
-          <div>Tokens/sec</div>
-          <div class="metric-value" id="tokensPerSec">0</div>
-        </div>
-        <div class="metric">
-          <div>GPU Memory</div>
-          <div class="metric-value" id="gpuMemory">0 MB</div>
-        </div>
-        <div class="metric">
-          <div>Latency</div>
-          <div class="metric-value" id="latency">0ms</div>
-        </div>
-        <div class="metric">
-          <div>Backend</div>
-          <div class="metric-value" id="backend">GPU</div>
+    <header>
+      <h1>🚀 StrictJS Runtime</h1>
+      <p>High-Performance Type-Safe JavaScript Runtime</p>
+    </header>
+
+    <div class="dashboard">
+      <div class="system-info">
+        <h2>System Information</h2>
+        <div id="systemInfo">Loading...</div>
+      </div>
+
+      <div class="demo-controls">
+        <h2>Demo Controls</h2>
+        <div class="button-group">
+          <button id="matrixDemo" class="btn btn-primary">Matrix Multiplication</button>
+          <button id="neuralDemo" class="btn btn-secondary">Neural Network</button>
+          <button id="simdDemo" class="btn btn-success">SIMD Operations</button>
+          <button id="benchmark" class="btn btn-warning">Run Benchmark</button>
         </div>
       </div>
-      
-      <h3>Model Progress</h3>
-      <div class="progress-bar">
-        <div class="progress-fill" id="modelProgress" style="width: 0%"></div>
+
+      <div class="results">
+        <h2>Results</h2>
+        <div id="results" class="results-container">
+          <p>Run a demo to see results here...</p>
+        </div>
       </div>
-      <div id="progressText">Initializing model...</div>
-      
-      <h3>System Status</h3>
-      <div class="system-status" id="systemStatus">
-        <div class="status-item">✅ Type System: Ready</div>
-        <div class="status-item">✅ GPU Memory: Ready</div>
-        <div class="status-item">🔄 LLM Model: Loading...</div>
-        <div class="status-item">✅ Strict Functions: Ready</div>
+
+      <div class="performance">
+        <h2>Performance Metrics</h2>
+        <div id="performance" class="metrics">
+          <div class="metric">
+            <span class="label">GPU Memory:</span>
+            <span id="gpuMemory" class="value">-</span>
+          </div>
+          <div class="metric">
+            <span class="label">Active Buffers:</span>
+            <span id="activeBuffers" class="value">-</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-examples">
+        <h2>Code Examples</h2>
+        <div class="example">
+          <h3>Strict Array Creation</h3>
+          <pre><code>
+const tensor = runtime.createTensor(HeapType.TensorF32, [128, 128, 64]);
+const matrix = runtime.createMatrix(HeapType.MatrixF32, 256, 128);
+const vector = runtime.createVector(HeapType.VectorF32, 1024);
+          </code></pre>
+        </div>
+        
+        <div class="example">
+          <h3>Optimized Loops</h3>
+          <pre><code>
+const loop = runtime.createOptimizedForLoop(
+  0, 1000, 1, HeapType.TensorF32, 1000, OptimizationMode.GPU
+);
+
+while (loop.hasNext()) {
+  const batch = loop.nextGPUBatch();
+  // Process on GPU
+}
+          </code></pre>
+        </div>
       </div>
     </div>
   </div>
 
   <script type="module">
-    import init, {
-      createGPUType,
-      createSIMDType,
-      JsHeapType,
-      HeapType,
-      Schema,
-      StrictFunction,
-      GPUMemoryManager,
-      GPUBufferUsage,
-      getAvailableGPUTypes,
-      getAvailableSIMDTypes
-    } from "./pkg/strictjs_runtime.js";
+    import init, { init_strictjs, HeapType, OptimizationMode } from "./pkg/strictjs_runtime.js";
 
-    // Global state
-    let strictLLM = null;
-    let isGenerating = false;
-    let tokensGenerated = 0;
-    let startTime = 0;
-
-    // UI Update functions
-    function updateProgress(percent, text) {
-      document.getElementById('modelProgress').style.width = percent + '%';
-      document.getElementById('progressText').textContent = text;
-    }
-
-    function updateSystemStatus(component, status) {
-      const statusDiv = document.getElementById('systemStatus');
-      const items = statusDiv.getElementsByClassName('status-item');
-      for (let item of items) {
-        if (item.textContent.includes(component)) {
-          item.textContent = status + ' ' + component;
-          break;
-        }
-      }
-    }
-
-    function updateTokensPerSec(tps) {
-      document.getElementById('tokensPerSec').textContent = tps.toFixed(1);
-    }
-
-    function updateGPUMemory(memoryBytes) {
-      const memoryMB = (memoryBytes / (1024 * 1024)).toFixed(1);
-      document.getElementById('gpuMemory').textContent = memoryMB + ' MB';
-    }
-
-    function updateLatency(latency) {
-      document.getElementById('latency').textContent = latency.toFixed(1) + 'ms';
-    }
-
-    function updateBackend(backend) {
-      document.getElementById('backend').textContent = backend;
-    }
-
-    function addMessage(text, isUser = false) {
-      const chatHistory = document.getElementById('chatHistory');
-      const messageDiv = document.createElement('div');
-      messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
-      messageDiv.textContent = text;
-      chatHistory.appendChild(messageDiv);
-      chatHistory.scrollTop = chatHistory.scrollHeight;
-    }
-
-    // Main generation function
-    async function generateText() {
-      const prompt = document.getElementById('promptInput').value.trim();
-      if (!prompt) return;
-
-      if (!strictLLM || !strictLLM.isInitialized) {
-        addMessage("❌ StrictLLM is not initialized yet. Please wait...", false);
-        return;
-      }
-
-      isGenerating = true;
-      window.stopGenerationFlag = false;
-      document.getElementById('generateBtn').disabled = true;
-      document.getElementById('stopBtn').disabled = false;
-
-      addMessage(prompt, true);
-      document.getElementById('promptInput').value = '';
-
-      try {
-        const response = await strictLLM.generate(prompt, 50, 0.7);
-        addMessage(response);
-      } catch (error) {
-        addMessage(`Error: ${error.message}`);
-        console.error('Generation error:', error);
-      } finally {
-        isGenerating = false;
-        document.getElementById('generateBtn').disabled = false;
-        document.getElementById('stopBtn').disabled = true;
-      }
-    }
-
-    function stopGeneration() {
-      window.stopGenerationFlag = true;
-      document.getElementById('stopBtn').disabled = true;
-      addMessage("⏹️ Generation stopped", false);
-    }
-
-    // Initialize the system
-    async function initializeStrictLLM() {
-      console.log("🚀 Initializing StrictLLM...");
-      updateProgress(10, "Loading WebAssembly runtime...");
-      
-      try {
-        await init();
-        updateProgress(30, "Initializing type systems...");
-
-        // Initialize core systems
-        strictLLM = new StrictLLM();
-        await strictLLM.initialize();
-        
-        updateProgress(100, "StrictLLM Ready!");
-        document.getElementById('generateBtn').disabled = false;
-        updateSystemStatus('LLM Model', '✅');
-        
-        // Add welcome message
-        addMessage("Hello! I'm StrictLLM, running entirely in your browser with GPU acceleration. How can I help you today?", false);
-        
-      } catch (error) {
-        console.error("Initialization failed:", error);
-        updateProgress(0, "Initialization failed");
-        addMessage("❌ Failed to initialize StrictLLM: " + error.message, false);
-      }
-    }
-
-    class StrictLLM {
+    class StrictJSDemo {
       constructor() {
-        this.memoryManager = new GPUMemoryManager();
-        this.layers = [];
-        this.vocab = {};
-        this.isInitialized = false;
-        
-        // Performance tracking
-        this.metrics = {
-          tokensPerSecond: 0,
-          gpuMemoryUsage: 0,
-          averageLatency: 0,
-          activeBackend: 'GPU'
-        };
+        this.runtime = null;
+        this.init();
       }
 
-      async initialize() {
-        console.log("🔄 Creating optimized types for LLM...");
-        
-        // Create optimized types for LLM
-        this.embeddingType = createGPUType('tensor_f32');
-        this.attentionType = createGPUType('tensor_f32'); 
-        this.mlpType = createGPUType('tensor_f32');
-        this.simdType = getSIMDTypeForUseCase('neural_networks');
-
-        // Create model schema
-        this.modelSchema = new Schema();
-        this.modelSchema.addTensorField('token_embeddings', 2);
-        this.modelSchema.addMatrixField('attention_weights', 512, 512);
-        this.modelSchema.addVectorField('attention_bias', 512);
-        this.modelSchema.addMatrixField('mlp_weights', 512, 2048);
-        this.modelSchema.addVectorField('mlp_bias', 2048);
-        this.modelSchema.addGPUField('gpu_kv_cache', 'tensor_f32');
-        
-        this.modelSchema.addMetadata('model_type', 'transformer');
-        this.modelSchema.addMetadata('hidden_size', '512');
-        this.modelSchema.addMetadata('num_heads', '8');
-
-        updateProgress(50, "Creating strict functions...");
-        
-        // Create strict functions for LLM operations
-        await this.createStrictFunctions();
-        
-        updateProgress(70, "Loading model weights...");
-        
-        // Load or create a simple model (in real implementation, load actual weights)
-        await this.loadModelWeights();
-        
-        this.isInitialized = true;
-        console.log("✅ StrictLLM initialized successfully");
-      }
-
-      async createStrictFunctions() {
-        // Self-attention with causal masking
-        this.attentionFn = new StrictFunction(
-          this.attentionKernel.bind(this),
-          [
-            new JsHeapType(HeapType.TensorF32), // queries
-            new JsHeapType(HeapType.TensorF32), // keys  
-            new JsHeapType(HeapType.TensorF32), // values
-            new JsHeapType(HeapType.TensorF32)  // mask
-          ],
-          HeapType.TensorF32
-        );
-
-        // Feed-forward network
-        this.mlpFn = new StrictFunction(
-          this.mlpKernel.bind(this),
-          [
-            new JsHeapType(HeapType.TensorF32), // input
-            new JsHeapType(HeapType.MatrixF32), // weights1
-            new JsHeapType(HeapType.VectorF32), // bias1
-            new JsHeapType(HeapType.MatrixF32), // weights2
-            new JsHeapType(HeapType.VectorF32)  // bias2
-          ],
-          HeapType.TensorF32
-        );
-
-        // Layer normalization
-        this.layerNormFn = new StrictFunction(
-          this.layerNormKernel.bind(this),
-          [
-            new JsHeapType(HeapType.TensorF32), // input
-            new JsHeapType(HeapType.VectorF32), // gamma
-            new JsHeapType(HeapType.VectorF32)  // beta
-          ],
-          HeapType.TensorF32
-        );
-
-        console.log("✅ Strict functions created");
-      }
-
-      async loadModelWeights() {
-        // In a real implementation, this would load actual model weights
-        // For demo purposes, we create synthetic weights
-        
-        const hiddenSize = 512;
-        const numHeads = 8;
-        const headSize = hiddenSize / numHeads;
-        
-        // Create synthetic weights for a small transformer
-        this.weights = {
-          tokenEmbeddings: this.createRandomTensor([5000, hiddenSize]), // vocab size 5000
-          attention: {
-            q_weights: this.createRandomTensor([hiddenSize, hiddenSize]),
-            k_weights: this.createRandomTensor([hiddenSize, hiddenSize]),
-            v_weights: this.createRandomTensor([hiddenSize, hiddenSize]),
-            o_weights: this.createRandomTensor([hiddenSize, hiddenSize]),
-            q_bias: this.createRandomVector(hiddenSize),
-            k_bias: this.createRandomVector(hiddenSize),
-            v_bias: this.createRandomVector(hiddenSize),
-            o_bias: this.createRandomVector(hiddenSize)
-          },
-          mlp: {
-            fc1_weights: this.createRandomTensor([hiddenSize, hiddenSize * 4]),
-            fc1_bias: this.createRandomVector(hiddenSize * 4),
-            fc2_weights: this.createRandomTensor([hiddenSize * 4, hiddenSize]),
-            fc2_bias: this.createRandomVector(hiddenSize)
-          },
-          norm: {
-            gamma: this.createOnesVector(hiddenSize),
-            beta: this.createZerosVector(hiddenSize)
-          }
-        };
-
-        // Upload weights to GPU
-        await this.uploadWeightsToGPU();
-        
-        console.log("✅ Model weights loaded");
-      }
-
-      async uploadWeightsToGPU() {
-        // Create GPU buffers for all weights
-        const usage = combineGpuUsage('STORAGE', 'COPY_DST');
-        
-        for (const [name, weight] of Object.entries(this.weights)) {
-          if (weight.data) {
-            const bufferId = this.memoryManager.createBuffer(
-              this.embeddingType,
-              weight.data.length * 4, // 4 bytes per f32
-              usage
-            );
-            weight.gpuBufferId = bufferId;
-          }
-        }
-        
-        this.metrics.gpuMemoryUsage = this.memoryManager.getTotalMemory();
-        updateGPUMemory(this.metrics.gpuMemoryUsage);
-      }
-
-      // Core LLM inference method
-      async generate(prompt, maxTokens = 100, temperature = 0.7) {
-        if (!this.isInitialized) {
-          throw new Error("StrictLLM not initialized");
-        }
-
-        const tokens = this.tokenize(prompt);
-        let hiddenStates = await this.forwardEmbedding(tokens);
-        
-        const generatedTokens = [];
-        startTime = performance.now();
-        tokensGenerated = 0;
-        
-        for (let i = 0; i < maxTokens && !window.stopGenerationFlag; i++) {
-          // Transformer layers
-          for (let layerIdx = 0; layerIdx < 6; layerIdx++) { // 6-layer transformer
-            hiddenStates = await this.transformerLayer(hiddenStates, layerIdx);
-          }
+      async init() {
+        try {
+          await init();
+          this.runtime = init_strictjs();
+          this.updateSystemInfo();
+          this.setupEventListeners();
+          this.startPerformanceMonitor();
           
-          // Get next token prediction
-          const nextToken = await this.predictNextToken(hiddenStates, temperature);
-          generatedTokens.push(nextToken);
-          
-          // Update hidden states with new token
-          const newEmbedding = await this.forwardEmbedding([nextToken]);
-          hiddenStates = await this.concatTensors(hiddenStates, newEmbedding);
-          
-          // Update metrics
-          tokensGenerated++;
-          this.updateMetrics();
-          
-          // Yield to UI
-          await new Promise(resolve => setTimeout(resolve, 0));
+          console.log("StrictJS Runtime initialized successfully!");
+        } catch (error) {
+          console.error("Failed to initialize StrictJS Runtime:", error);
         }
-        
-        return this.detokenize(generatedTokens);
       }
 
-      async transformerLayer(hiddenStates, layerIdx) {
-        // Self-attention
-        const attentionOutput = await this.selfAttention(hiddenStates);
-        
-        // Residual connection and layer norm
-        let normalized = this.layerNormFn.callComplex([
-          attentionOutput,
-          this.weights.norm.gamma,
-          this.weights.norm.beta
-        ], {
-          simdType: this.simdType.toString(),
-          workgroupSize: this.embeddingType.optimalWorkgroupSize()
-        });
-
-        // Feed-forward network
-        const mlpOutput = this.mlpFn.callComplex([
-          normalized.value, // Use .value to get the actual result
-          this.weights.mlp.fc1_weights,
-          this.weights.mlp.fc1_bias,
-          this.weights.mlp.fc2_weights,
-          this.weights.mlp.fc2_bias
-        ], {
-          simdType: this.simdType.toString(),
-          workgroupSize: this.mlpType.optimalWorkgroupSize()
-        });
-        
-        // Final residual connection
-        return await this.addTensors(normalized.value, mlpOutput.value);
+      updateSystemInfo() {
+        const systemInfo = this.runtime.getSystemInfo();
+        document.getElementById('systemInfo').innerHTML = `
+          <div class="info-item">
+            <strong>Runtime:</strong> ${systemInfo.runtime} v${systemInfo.version}
+          </div>
+          <div class="info-item">
+            <strong>Capabilities:</strong> ${systemInfo.capabilities.join(', ')}
+          </div>
+        `;
       }
 
-      async selfAttention(hiddenStates) {
-        // Compute queries, keys, values
-        const queries = await this.matrixMultiply(hiddenStates, this.weights.attention.q_weights);
-        const keys = await this.matrixMultiply(hiddenStates, this.weights.attention.k_weights);
-        const values = await this.matrixMultiply(hiddenStates, this.weights.attention.v_weights);
-        
-        // Apply attention
-        const attentionResult = this.attentionFn.callComplex([
-          queries, keys, values, this.createCausalMask(queries.rows)
-        ], {
-          simdType: this.simdType.toString(),
-          workgroupSize: this.attentionType.optimalWorkgroupSize()
-        });
-        
-        // Output projection
-        return await this.matrixMultiply(attentionResult.value, this.weights.attention.o_weights);
+      setupEventListeners() {
+        document.getElementById('matrixDemo').addEventListener('click', () => this.runMatrixDemo());
+        document.getElementById('neuralDemo').addEventListener('click', () => this.runNeuralDemo());
+        document.getElementById('simdDemo').addEventListener('click', () => this.runSIMDDemo());
+        document.getElementById('benchmark').addEventListener('click', () => this.runBenchmark());
       }
 
-      // Kernel implementations
-      attentionKernel(queries, keys, values, mask) {
-        // Simplified attention implementation
-        // In real implementation, this would run on GPU
-        console.log("🔍 Running attention kernel...");
-        const result = this.createRandomTensor([queries.rows, values.columns]);
-        return result;
-      }
-
-      mlpKernel(input, w1, b1, w2, b2) {
-        console.log("🧠 Running MLP kernel...");
-        const result = this.createRandomTensor([input.rows, w2.columns]);
-        return result;
-      }
-
-      layerNormKernel(input, gamma, beta) {
-        console.log("📊 Running layer norm kernel...");
-        return input; // Return input as-is for demo
-      }
-
-      // Utility methods
-      tokenize(text) {
-        // Simple tokenization for demo
-        const words = text.toLowerCase().split(/\s+/);
-        return words.map(word => {
-          let hash = 0;
-          for (let i = 0; i < word.length; i++) {
-            hash = ((hash << 5) - hash) + word.charCodeAt(i);
-            hash |= 0; // Convert to 32bit integer
-          }
-          return Math.abs(hash) % 5000; // Simple hash-based tokenization
-        });
-      }
-
-      detokenize(tokens) {
-        // Simple detokenization for demo
-        return tokens.map(token => `token_${token}`).join(' ');
-      }
-
-      createRandomTensor(shape) {
-        const size = shape.reduce((a, b) => a * b, 1);
-        return {
-          data: new Float32Array(size).map(() => (Math.random() - 0.5) * 0.02),
-          shape: shape,
-          rows: shape[0],
-          columns: shape[1],
-          __type: 'tensor_f32'
-        };
-      }
-
-      createRandomVector(size) {
-        return {
-          data: new Float32Array(size).map(() => (Math.random() - 0.5) * 0.02),
-          length: size,
-          __type: 'vector_f32'
-        };
-      }
-
-      createOnesVector(size) {
-        return {
-          data: new Float32Array(size).fill(1.0),
-          length: size,
-          __type: 'vector_f32'
-        };
-      }
-
-      createZerosVector(size) {
-        return {
-          data: new Float32Array(size).fill(0.0),
-          length: size,
-          __type: 'vector_f32'
-        };
-      }
-
-      createCausalMask(seqLen) {
-        const mask = new Float32Array(seqLen * seqLen).fill(-Infinity);
-        for (let i = 0; i < seqLen; i++) {
-          for (let j = 0; j <= i; j++) {
-            mask[i * seqLen + j] = 0;
-          }
+      async runMatrixDemo() {
+        try {
+          this.showLoading('Running Matrix Multiplication Demo...');
+          const result = this.runtime.runMatrixMultiplicationDemo();
+          this.displayResult('Matrix Multiplication', result);
+        } catch (error) {
+          this.displayError(error);
         }
-        return {
-          data: mask,
-          shape: [seqLen, seqLen],
-          rows: seqLen,
-          columns: seqLen,
-          __type: 'tensor_f32'
-        };
       }
 
-      updateMetrics() {
-        const elapsed = (performance.now() - startTime) / 1000;
-        this.metrics.tokensPerSecond = tokensGenerated / elapsed;
-        this.metrics.averageLatency = elapsed / tokensGenerated * 1000;
-        
-        updateTokensPerSec(this.metrics.tokensPerSecond);
-        updateLatency(this.metrics.averageLatency);
-        updateBackend(this.metrics.activeBackend);
+      async runNeuralDemo() {
+        try {
+          this.showLoading('Running Neural Network Demo...');
+          const result = this.runtime.runNeuralNetworkDemo();
+          this.displayResult('Neural Network', result);
+        } catch (error) {
+          this.displayError(error);
+        }
       }
 
-      // Placeholder for tensor operations (would be GPU-accelerated)
-      async matrixMultiply(a, b) { 
-        console.log(`📐 Matrix multiply: ${a.rows}x${a.columns} * ${b.rows}x${b.columns}`);
-        return this.createRandomTensor([a.rows, b.columns]);
+      async runSIMDDemo() {
+        try {
+          this.showLoading('Running SIMD Demo...');
+          const result = this.runtime.runSIMDDemo();
+          this.displayResult('SIMD Operations', result);
+        } catch (error) {
+          this.displayError(error);
+        }
       }
-      
-      async addTensors(a, b) { 
-        return a;
+
+      async runBenchmark() {
+        try {
+          this.showLoading('Running Benchmark...');
+          // Create a simple operation to benchmark
+          const operation = new Function(`
+            let sum = 0;
+            for (let i = 0; i < 1000; i++) {
+              sum += Math.sin(i) * Math.cos(i);
+            }
+            return sum;
+          `);
+          
+          const result = this.runtime.benchmarkOperation(operation, 1000);
+          this.displayResult('Benchmark', result);
+        } catch (error) {
+          this.displayError(error);
+        }
       }
-      
-      async concatTensors(a, b) { 
-        return this.createRandomTensor([a.rows + b.rows, a.columns]);
+
+      displayResult(title, result) {
+        const resultsDiv = document.getElementById('results');
+        const resultHTML = `
+          <div class="result-item">
+            <h3>${title}</h3>
+            <div class="result-details">
+              ${Object.entries(result).map(([key, value]) => `
+                <div class="result-field">
+                  <strong>${key}:</strong> ${value}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        resultsDiv.innerHTML = resultHTML;
       }
-      
-      async forwardEmbedding(tokens) { 
-        console.log(`🔤 Embedding ${tokens.length} tokens`);
-        return this.createRandomTensor([tokens.length, 512]);
+
+      displayError(error) {
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = `
+          <div class="error">
+            <h3>Error</h3>
+            <p>${error.toString()}</p>
+          </div>
+        `;
       }
-      
-      async predictNextToken(hiddenStates, temperature) {
-        // Simple random sampling for demo
-        return Math.floor(Math.random() * 5000);
+
+      showLoading(message) {
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = `
+          <div class="loading">
+            <p>${message}</p>
+          </div>
+        `;
+      }
+
+      startPerformanceMonitor() {
+        setInterval(() => {
+          const gpuInfo = this.runtime.getGPUInfo();
+          document.getElementById('gpuMemory').textContent = 
+            `${(gpuInfo.totalMemory / (1024 * 1024)).toFixed(2)} MB`;
+          document.getElementById('activeBuffers').textContent = 
+            gpuInfo.bufferCount;
+        }, 2000);
       }
     }
 
-    // Combine GPU usage helper
-    function combineGpuUsage(...flags) {
-      let combined = 0;
-      for (const flag of flags) {
-        if (flag instanceof GPUBufferUsage) {
-          combined |= flag.bits();
-        } else if (typeof flag === 'number') {
-          combined |= flag;
-        } else if (typeof flag === 'string') {
-          const flagMap = {
-            'MAP_READ': 0x1, 'MAP_WRITE': 0x2, 'COPY_SRC': 0x4,
-            'COPY_DST': 0x8, 'INDEX': 0x10, 'VERTEX': 0x20,
-            'UNIFORM': 0x40, 'STORAGE': 0x80, 'INDIRECT': 0x100,
-            'QUERY_RESOLVE': 0x200
-          };
-          combined |= flagMap[flag] || 0;
-        }
-      }
-      return new GPUBufferUsage(combined);
-    }
-
-    function getSIMDTypeForUseCase(useCase) {
-      const available = getAvailableSIMDTypes();
-      if (!Array.isArray(available) || available.length === 0) return null;
-      if (useCase === "neural_networks") {
-        return available.find(t => String(t).includes("f32x8")) || available.find(t => String(t).includes("f32x4")) || available[0];
-      }
-      return available[0];
-    }
-
-    // Event listeners
-    document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('generateBtn').addEventListener('click', generateText);
-      document.getElementById('stopBtn').addEventListener('click', stopGeneration);
-      
-      // Add Enter key support for textarea
-      document.getElementById('promptInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && e.ctrlKey) {
-          generateText();
-        }
-      });
-    });
-
-    // Initialize everything when page loads
-    window.addEventListener('load', initializeStrictLLM);
+    // Initialize the demo when the page loads
+    new StrictJSDemo();
   </script>
 </body>
 </html>

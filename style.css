@@ -1,0 +1,193 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  color: #333;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 40px;
+  color: white;
+}
+
+header h1 {
+  font-size: 3rem;
+  margin-bottom: 10px;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+header p {
+  font-size: 1.2rem;
+  opacity: 0.9;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.system-info, .demo-controls, .results, .performance, .code-examples {
+  background: white;
+  padding: 25px;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.system-info h2, .demo-controls h2, .results h2, .performance h2, .code-examples h2 {
+  color: #4a5568;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 10px;
+}
+
+.info-item {
+  margin-bottom: 10px;
+  padding: 8px 0;
+}
+
+.button-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.btn {
+  padding: 15px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.btn-primary { background: #4299e1; color: white; }
+.btn-secondary { background: #ed8936; color: white; }
+.btn-success { background: #48bb78; color: white; }
+.btn-warning { background: #ecc94b; color: #2d3748; }
+
+.results-container {
+  min-height: 200px;
+  background: #f7fafc;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.result-item {
+  background: white;
+  border-left: 4px solid #4299e1;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 0 8px 8px 0;
+}
+
+.result-item h3 {
+  color: #2d3748;
+  margin-bottom: 10px;
+}
+
+.result-field {
+  margin-bottom: 5px;
+  padding: 5px 0;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.metric {
+  background: #edf2f7;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.label {
+  display: block;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 5px;
+}
+
+.value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+.code-examples {
+  grid-column: 1 / -1;
+}
+
+.example {
+  background: #f7fafc;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.example h3 {
+  color: #2d3748;
+  margin-bottom: 15px;
+}
+
+pre {
+  background: #2d3748;
+  color: #e2e8f0;
+  padding: 20px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #4a5568;
+}
+
+.error {
+  background: #fed7d7;
+  color: #c53030;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #e53e3e;
+}
+
+@media (max-width: 768px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+  
+  .button-group {
+    grid-template-columns: 1fr;
+  }
+  
+  header h1 {
+    font-size: 2rem;
+  }
+}

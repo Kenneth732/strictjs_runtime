@@ -1316,22 +1316,23 @@ impl StrictArray {
         Ok(obj.into())
     }
 
-    #[wasm_bindgen(js_name = fromJSON)]
-    pub fn from_json(json: JsValue) -> Result<StrictArray, JsValue> {
-        let obj: Object = json.dyn_into()?;
-        
-        let heap_type_val = js_sys::Reflect::get(&obj, &"type".into())?;
-        let length_val = js_sys::Reflect::get(&obj, &"length".into())?;
-        let data_val = js_sys::Reflect::get(&obj, &"data".into())?;
-        
-        let heap_type = HeapType::from_js_value(heap_type_val)?;
-        let length = length_val.as_f64().ok_or("Invalid length")? as usize;
-        
-        let data_string = data_val.as_string().ok_or("Invalid data string")?;
-        let data_array: Uint8Array = js_sys::JSON::parse(&data_string)?.dyn_into()?;
-        
-        StrictArray::from_uint8_array(heap_type, &data_array)
-    }
+// In src/strict_array/implementation.rs, fix the JSON parsing line:
+#[wasm_bindgen(js_name = fromJSON)]
+pub fn from_json(json: JsValue) -> Result<StrictArray, JsValue> {
+    let obj: Object = json.dyn_into()?;
+    
+    let heap_type_val = js_sys::Reflect::get(&obj, &"type".into())?;
+    let length_val = js_sys::Reflect::get(&obj, &"length".into())?;
+    let data_val = js_sys::Reflect::get(&obj, &"data".into())?;
+    
+    let heap_type = HeapType::from_js_value(heap_type_val)?;
+    let _length = length_val.as_f64().ok_or("Invalid length")? as usize;
+    
+    let data_string = data_val.as_string().ok_or("Invalid data string")?;
+    let data_array: Uint8Array = js_sys::JSON::parse(&data_string)?.dyn_into()?;
+    
+    StrictArray::from_uint8_array(heap_type, &data_array)
+}
 }
 
 // Internal helper methods

@@ -8,6 +8,7 @@ mod strict_object;
 mod strict_bigint;
 mod strict_function;
 mod loops;
+
 mod strict_async;
 mod threads;
 mod utils;

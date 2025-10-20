@@ -11,3 +11,7 @@ pub use heap_type::HeapType;
 pub use num::Num;
 pub use schema::Schema;
 pub use simd_types::*; 
+
+
+pub mod optimization;
+pub use optimization::OptimizationMode;
