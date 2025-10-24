@@ -1,4 +1,5 @@
 
+
 // src/strict_function/implementation.rs
 use crate::types::heap_type::{HeapType, JsHeapType, JsTypeCapabilities, TypeCapabilities};
 use js_sys::{Array, Function, Object, Reflect};
@@ -215,14 +216,34 @@ impl StrictFunction {
         let arg_type = self.arg_types[index];
         let capabilities = arg_type.capabilities();
 
-        if capabilities.contains(TypeCapabilities::NUMERIC_OPS) {
-            self.convert_to_numeric(arg_val, arg_type, index)
-        } else if capabilities.contains(TypeCapabilities::STRING_OPS) {
-            self.convert_to_string(arg_val, index)
-        } else if capabilities.contains(TypeCapabilities::ITERABLE) {
-            self.convert_to_iterable(arg_val, arg_type, index)
-        } else {
-            self.validate_strict_type(arg_val, arg_type, index)
+        // FIXED: Check for specific types first before falling back to capabilities
+        match arg_type {
+            // Array types should go to iterable conversion
+            HeapType::Array => self.convert_to_iterable(arg_val, arg_type, index),
+            
+            // String types should go to string conversion  
+            HeapType::Str | HeapType::Str16 => self.convert_to_string(arg_val, index),
+            
+            // Numeric types should go to numeric conversion
+            HeapType::Number | HeapType::U8 | HeapType::I8 | HeapType::U16 | HeapType::I16 |
+            HeapType::U32 | HeapType::I32 | HeapType::U64 | HeapType::I64 |
+            HeapType::F32 | HeapType::F64 => self.convert_to_numeric(arg_val, arg_type, index),
+            
+            // Bool type
+            HeapType::Bool => self.validate_strict_type(arg_val, arg_type, index),
+            
+            // For other types, use capability-based routing
+            _ => {
+                if capabilities.contains(TypeCapabilities::NUMERIC_OPS) {
+                    self.convert_to_numeric(arg_val, arg_type, index)
+                } else if capabilities.contains(TypeCapabilities::STRING_OPS) {
+                    self.convert_to_string(arg_val, index)
+                } else if capabilities.contains(TypeCapabilities::ITERABLE) {
+                    self.convert_to_iterable(arg_val, arg_type, index)
+                } else {
+                    self.validate_strict_type(arg_val, arg_type, index)
+                }
+            }
         }
     }
 
@@ -285,7 +306,7 @@ impl StrictFunction {
         target_type: HeapType,
         index: usize,
     ) -> Result<JsValue, JsValue> {
-        if arg_val.is_object() {
+        if arg_val.is_object() || arg_val.is_array() {
             Ok(arg_val)
         } else if target_type == HeapType::Array {
             if let Some(s) = arg_val.as_string() {
@@ -319,7 +340,6 @@ impl StrictFunction {
     ) -> Result<JsValue, JsValue> {
         match target_type {
             HeapType::Struct
-            | HeapType::Array
             | HeapType::Map
             | HeapType::Date
             | HeapType::Buffer => {
@@ -330,6 +350,18 @@ impl StrictFunction {
                         JsValue::from_str("Must be an object"),
                         index,
                         "object",
+                    ))
+                }
+            }
+            HeapType::Array => {
+                // Arrays can be JavaScript arrays or objects
+                if arg_val.is_object() || arg_val.is_array() {
+                    Ok(arg_val)
+                } else {
+                    Err(self.enhance_error_with_type_info(
+                        JsValue::from_str("Must be an array or object"),
+                        index,
+                        "array",
                     ))
                 }
             }
@@ -454,116 +486,116 @@ impl StrictFunction {
         Ok(key_parts.join("|"))
     }
 
- fn validate_and_wrap_result(&self, result: JsValue) -> Result<StrictFunctionResult, JsValue> {
-    let result_type = self.return_type;
-    let capabilities = result_type.capabilities();
-    
-    let (value, result_type_str) = match result_type {
-        HeapType::Number => {
-            if result.as_f64().is_some() {
-                (result, "number")
-            } else {
-                return Err(JsValue::from_str("Function must return a number"));
-            }
-        },
-        HeapType::Any => {
-            self.wrap_any_result(result)
-        },
-        HeapType::U8 | HeapType::I8 | HeapType::U16 | HeapType::I16 
-        | HeapType::U32 | HeapType::I32 | HeapType::U64 | HeapType::I64 => {
-            let num = result.as_f64()
-                .or_else(|| result.as_bool().map(|b| if b { 1.0 } else { 0.0 }))
-                .ok_or(JsValue::from_str("Function must return a number or boolean"))?;
-            let clamped = self.clamp_value(result_type, num);
-            (JsValue::from_f64(clamped), "number")
-        },
-        HeapType::F32 | HeapType::F64 => {
-            if let Some(num) = result.as_f64() {
-                (JsValue::from_f64(num), "number")
-            } else {
-                return Err(JsValue::from_str("Function must return a number"));
-            }
-        },
-        HeapType::Bool => {
-            if let Some(b) = result.as_bool() {
-                (JsValue::from_bool(b), "boolean")
-            } else if let Some(num) = result.as_f64() {
-                let bool_val = num != 0.0;
-                (JsValue::from_bool(bool_val), "boolean")
-            } else {
-                return Err(JsValue::from_str("Function must return a boolean or number"));
-            }
-        },
-        HeapType::Str | HeapType::Str16 => {
-            if let Some(s) = result.as_string() {
-                (JsValue::from_str(&s), "string")
-            } else {
-                return Err(JsValue::from_str("Function must return a string"));
-            }
-        },
-        HeapType::Struct | HeapType::Array | HeapType::Map | HeapType::Date | HeapType::Buffer => {
-            if result.is_object() {
-                (result, "object")
-            } else {
-                return Err(JsValue::from_str("Function must return an object"));
-            }
-        },
-        HeapType::Null => {
-            if result.is_null() {
-                (JsValue::NULL, "null")
-            } else {
-                return Err(JsValue::from_str("Function must return null"));
-            }
-        },
-        HeapType::Undefined => {
-            if result.is_undefined() {
-                (JsValue::UNDEFINED, "undefined")
-            } else {
-                return Err(JsValue::from_str("Function must return undefined"));
-            }
-        },
-        HeapType::Symbol => {
-            if result.is_symbol() {
-                (result, "symbol")
-            } else {
-                return Err(JsValue::from_str("Function must return a symbol"));
-            }
-        },
+    fn validate_and_wrap_result(&self, result: JsValue) -> Result<StrictFunctionResult, JsValue> {
+        let result_type = self.return_type;
+        let capabilities = result_type.capabilities();
         
-        // === FIXED AI/ML TYPES ===
-        HeapType::TensorF32 => (result, "tensor_f32"),
-        HeapType::TensorF64 => (result, "tensor_f64"),
-        HeapType::TensorI32 => (result, "tensor_i32"),
-        HeapType::TensorU8 => (result, "tensor_u8"),
-        HeapType::TensorI8 => (result, "tensor_i8"),
-        HeapType::TensorI16 => (result, "tensor_i16"),
-        HeapType::TensorU16 => (result, "tensor_u16"),
-        HeapType::MatrixF32 => (result, "matrix_f32"),
-        HeapType::MatrixF64 => (result, "matrix_f64"),
-        HeapType::MatrixC32 => (result, "matrix_c32"),
-        HeapType::MatrixC64 => (result, "matrix_c64"),
-        HeapType::VectorF32 => (result, "vector_f32"),
-        HeapType::VectorF64 => (result, "vector_f64"),
-        HeapType::VectorI32 => (result, "vector_i32"),
-        HeapType::SparseMatrix => (result, "sparse_matrix"),
-        HeapType::Quantized8 => (result, "quantized8"),
-        HeapType::Quantized16 => (result, "quantized16"),
-        HeapType::Embedding => (result, "embedding"),
-        HeapType::Attention => (result, "attention"),
-        HeapType::WeightF32 => (result, "weight_f32"),
-        HeapType::BiasF32 => (result, "bias_f32"),
-        HeapType::GradientF32 => (result, "gradient_f32"),
-        HeapType::Activation => (result, "activation"),
-        HeapType::GPUTensor => (result, "gpu_tensor"),
-        HeapType::SIMDVector => (result, "simd_vector"),
-    };
-    
-    Ok(StrictFunctionResult {
-        value,
-        result_type: result_type_str.to_string(),
-        capabilities: capabilities.to_js(),
-    })
-}
+        let (value, result_type_str) = match result_type {
+            HeapType::Number => {
+                if result.as_f64().is_some() {
+                    (result, "number")
+                } else {
+                    return Err(JsValue::from_str("Function must return a number"));
+                }
+            },
+            HeapType::Any => {
+                self.wrap_any_result(result)
+            },
+            HeapType::U8 | HeapType::I8 | HeapType::U16 | HeapType::I16 
+            | HeapType::U32 | HeapType::I32 | HeapType::U64 | HeapType::I64 => {
+                let num = result.as_f64()
+                    .or_else(|| result.as_bool().map(|b| if b { 1.0 } else { 0.0 }))
+                    .ok_or(JsValue::from_str("Function must return a number or boolean"))?;
+                let clamped = self.clamp_value(result_type, num);
+                (JsValue::from_f64(clamped), "number")
+            },
+            HeapType::F32 | HeapType::F64 => {
+                if let Some(num) = result.as_f64() {
+                    (JsValue::from_f64(num), "number")
+                } else {
+                    return Err(JsValue::from_str("Function must return a number"));
+                }
+            },
+            HeapType::Bool => {
+                if let Some(b) = result.as_bool() {
+                    (JsValue::from_bool(b), "boolean")
+                } else if let Some(num) = result.as_f64() {
+                    let bool_val = num != 0.0;
+                    (JsValue::from_bool(bool_val), "boolean")
+                } else {
+                    return Err(JsValue::from_str("Function must return a boolean or number"));
+                }
+            },
+            HeapType::Str | HeapType::Str16 => {
+                if let Some(s) = result.as_string() {
+                    (JsValue::from_str(&s), "string")
+                } else {
+                    return Err(JsValue::from_str("Function must return a string"));
+                }
+            },
+            HeapType::Struct | HeapType::Array | HeapType::Map | HeapType::Date | HeapType::Buffer => {
+                if result.is_object() || result.is_array() {
+                    (result, "object")
+                } else {
+                    return Err(JsValue::from_str("Function must return an object or array"));
+                }
+            },
+            HeapType::Null => {
+                if result.is_null() {
+                    (JsValue::NULL, "null")
+                } else {
+                    return Err(JsValue::from_str("Function must return null"));
+                }
+            },
+            HeapType::Undefined => {
+                if result.is_undefined() {
+                    (JsValue::UNDEFINED, "undefined")
+                } else {
+                    return Err(JsValue::from_str("Function must return undefined"));
+                }
+            },
+            HeapType::Symbol => {
+                if result.is_symbol() {
+                    (result, "symbol")
+                } else {
+                    return Err(JsValue::from_str("Function must return a symbol"));
+                }
+            },
+            
+            // === FIXED AI/ML TYPES ===
+            HeapType::TensorF32 => (result, "tensor_f32"),
+            HeapType::TensorF64 => (result, "tensor_f64"),
+            HeapType::TensorI32 => (result, "tensor_i32"),
+            HeapType::TensorU8 => (result, "tensor_u8"),
+            HeapType::TensorI8 => (result, "tensor_i8"),
+            HeapType::TensorI16 => (result, "tensor_i16"),
+            HeapType::TensorU16 => (result, "tensor_u16"),
+            HeapType::MatrixF32 => (result, "matrix_f32"),
+            HeapType::MatrixF64 => (result, "matrix_f64"),
+            HeapType::MatrixC32 => (result, "matrix_c32"),
+            HeapType::MatrixC64 => (result, "matrix_c64"),
+            HeapType::VectorF32 => (result, "vector_f32"),
+            HeapType::VectorF64 => (result, "vector_f64"),
+            HeapType::VectorI32 => (result, "vector_i32"),
+            HeapType::SparseMatrix => (result, "sparse_matrix"),
+            HeapType::Quantized8 => (result, "quantized8"),
+            HeapType::Quantized16 => (result, "quantized16"),
+            HeapType::Embedding => (result, "embedding"),
+            HeapType::Attention => (result, "attention"),
+            HeapType::WeightF32 => (result, "weight_f32"),
+            HeapType::BiasF32 => (result, "bias_f32"),
+            HeapType::GradientF32 => (result, "gradient_f32"),
+            HeapType::Activation => (result, "activation"),
+            HeapType::GPUTensor => (result, "gpu_tensor"),
+            HeapType::SIMDVector => (result, "simd_vector"),
+        };
+        
+        Ok(StrictFunctionResult {
+            value,
+            result_type: result_type_str.to_string(),
+            capabilities: capabilities.to_js(),
+        })
+    }
 
     fn wrap_any_result(&self, result: JsValue) -> (JsValue, &'static str) {
         if let Some(num) = result.as_f64() {
@@ -578,7 +610,7 @@ impl StrictFunction {
             (JsValue::UNDEFINED, "undefined")
         } else if result.is_symbol() {
             (result, "symbol")
-        } else if result.is_object() {
+        } else if result.is_object() || result.is_array() {
             (result, "object")
         } else {
             (result, "unknown")
@@ -609,13 +641,50 @@ impl StrictFunction {
         let arg_type = self.arg_types[index];
         let capabilities = arg_type.capabilities();
 
-        // Use capabilities for validation
-        if capabilities.contains(TypeCapabilities::NUMERIC_OPS) {
-            self.validate_numeric_argument(arg_val, index)
-        } else if capabilities.contains(TypeCapabilities::STRING_OPS) {
-            self.validate_string_argument(arg_val, index)
-        } else {
-            self.validate_strict_argument(arg_val, arg_type, index)
+        // FIXED: Use the same type-specific logic as process_argument_enhanced
+        match arg_type {
+            // Array types should validate as objects or arrays
+            HeapType::Array => {
+                if !arg_val.is_object() && !arg_val.is_array() {
+                    return Err(JsValue::from_str(&format!(
+                        "Argument {} must be an array or object",
+                        index
+                    )));
+                }
+                Ok(())
+            },
+            
+            // String types accept any type (they'll be converted)
+            HeapType::Str | HeapType::Str16 => Ok(()),
+            
+            // Numeric types validate numeric conversion
+            HeapType::Number | HeapType::U8 | HeapType::I8 | HeapType::U16 | HeapType::I16 |
+            HeapType::U32 | HeapType::I32 | HeapType::U64 | HeapType::I64 |
+            HeapType::F32 | HeapType::F64 => {
+                self.validate_numeric_argument(arg_val, index)
+            },
+            
+            // Bool type
+            HeapType::Bool => {
+                if arg_val.as_bool().is_none() && arg_val.as_f64().is_none() {
+                    return Err(JsValue::from_str(&format!(
+                        "Argument {} must be a boolean or number",
+                        index
+                    )));
+                }
+                Ok(())
+            },
+            
+            // For other types, use capability-based validation
+            _ => {
+                if capabilities.contains(TypeCapabilities::NUMERIC_OPS) {
+                    self.validate_numeric_argument(arg_val, index)
+                } else if capabilities.contains(TypeCapabilities::STRING_OPS) {
+                    Ok(()) // Strings accept any type
+                } else {
+                    self.validate_strict_argument(arg_val, arg_type, index)
+                }
+            }
         }
     }
 
@@ -651,11 +720,16 @@ impl StrictFunction {
         index: usize,
     ) -> Result<(), JsValue> {
         match arg_type {
-            HeapType::Struct
-            | HeapType::Array
-            | HeapType::Map
-            | HeapType::Date
-            | HeapType::Buffer => {
+            HeapType::Array => {
+                // Arrays can be JavaScript arrays or objects
+                if !arg_val.is_object() && !arg_val.is_array() {
+                    return Err(JsValue::from_str(&format!(
+                        "Argument {} must be an array or object",
+                        index
+                    )));
+                }
+            }
+            HeapType::Struct | HeapType::Map | HeapType::Date | HeapType::Buffer => {
                 if !arg_val.is_object() {
                     return Err(JsValue::from_str(&format!(
                         "Argument {} must be an object",
@@ -722,65 +796,65 @@ impl StrictFunction {
         self.process_result(result)
     }
 
-   fn process_result(&self, result: JsValue) -> Result<f64, JsValue> {
-    match self.return_type {
-        HeapType::Number => {
-            result.as_f64()
-                .ok_or(JsValue::from_str("Function must return a number"))
-        },
-        HeapType::Any => {
-            result.as_f64()
-                .or_else(|| result.as_bool().map(|b| if b { 1.0 } else { 0.0 }))
-                .or_else(|| result.as_string().map(|s| s.len() as f64))
-                .or(Some(0.0))
-                .ok_or(JsValue::from_str("Invalid return value"))
-        },
-        HeapType::U8 | HeapType::I8 | HeapType::U16 | HeapType::I16 
-        | HeapType::U32 | HeapType::I32 | HeapType::Bool => {
-            let num = result.as_f64()
-                .or_else(|| result.as_bool().map(|b| if b { 1.0 } else { 0.0 }))
-                .ok_or(JsValue::from_str("Function must return a number or boolean"))?;
+    fn process_result(&self, result: JsValue) -> Result<f64, JsValue> {
+        match self.return_type {
+            HeapType::Number => {
+                result.as_f64()
+                    .ok_or(JsValue::from_str("Function must return a number"))
+            },
+            HeapType::Any => {
+                result.as_f64()
+                    .or_else(|| result.as_bool().map(|b| if b { 1.0 } else { 0.0 }))
+                    .or_else(|| result.as_string().map(|s| s.len() as f64))
+                    .or(Some(0.0))
+                    .ok_or(JsValue::from_str("Invalid return value"))
+            },
+            HeapType::U8 | HeapType::I8 | HeapType::U16 | HeapType::I16 
+            | HeapType::U32 | HeapType::I32 | HeapType::Bool => {
+                let num = result.as_f64()
+                    .or_else(|| result.as_bool().map(|b| if b { 1.0 } else { 0.0 }))
+                    .ok_or(JsValue::from_str("Function must return a number or boolean"))?;
+                
+                Ok(self.clamp_value(self.return_type, num))
+            },
+            HeapType::U64 | HeapType::I64 => {
+                result.as_f64()
+                    .ok_or(JsValue::from_str("Function must return a number"))
+            },
+            HeapType::F32 | HeapType::F64 => {
+                result.as_f64()
+                    .ok_or(JsValue::from_str("Function must return a number"))
+            },
+            HeapType::Str | HeapType::Str16 => {
+                Ok(result.as_string().map(|s| s.len() as f64).unwrap_or(0.0))
+            },
+            HeapType::Struct | HeapType::Array | HeapType::Map | HeapType::Date | HeapType::Buffer => {
+                Ok(if result.is_object() || result.is_array() { 1.0 } else { 0.0 })
+            },
+            HeapType::Null => {
+                Ok(if result.is_null() { 1.0 } else { 0.0 })
+            },
+            HeapType::Undefined => {
+                Ok(if result.is_undefined() { 1.0 } else { 0.0 })
+            },
+            HeapType::Symbol => {
+                Ok(if result.is_symbol() { 1.0 } else { 0.0 })
+            },
             
-            Ok(self.clamp_value(self.return_type, num))
-        },
-        HeapType::U64 | HeapType::I64 => {
-            result.as_f64()
-                .ok_or(JsValue::from_str("Function must return a number"))
-        },
-        HeapType::F32 | HeapType::F64 => {
-            result.as_f64()
-                .ok_or(JsValue::from_str("Function must return a number"))
-        },
-        HeapType::Str | HeapType::Str16 => {
-            Ok(result.as_string().map(|s| s.len() as f64).unwrap_or(0.0))
-        },
-        HeapType::Struct | HeapType::Array | HeapType::Map | HeapType::Date | HeapType::Buffer => {
-            Ok(if result.is_object() { 1.0 } else { 0.0 })
-        },
-        HeapType::Null => {
-            Ok(if result.is_null() { 1.0 } else { 0.0 })
-        },
-        HeapType::Undefined => {
-            Ok(if result.is_undefined() { 1.0 } else { 0.0 })
-        },
-        HeapType::Symbol => {
-            Ok(if result.is_symbol() { 1.0 } else { 0.0 })
-        },
-        
-        // === ADD AI/ML TYPES HERE ===
-        HeapType::TensorF32 | HeapType::TensorF64 | HeapType::TensorI32 |
-        HeapType::TensorU8 | HeapType::TensorI8 | HeapType::TensorI16 | HeapType::TensorU16 |
-        HeapType::MatrixF32 | HeapType::MatrixF64 | HeapType::MatrixC32 | HeapType::MatrixC64 |
-        HeapType::VectorF32 | HeapType::VectorF64 | HeapType::VectorI32 |
-        HeapType::SparseMatrix | HeapType::Quantized8 | HeapType::Quantized16 |
-        HeapType::Embedding | HeapType::Attention |
-        HeapType::WeightF32 | HeapType::BiasF32 | HeapType::GradientF32 | HeapType::Activation |
-        HeapType::GPUTensor | HeapType::SIMDVector => {
-            // For AI/ML types, return 1.0 if the value exists, 0.0 otherwise
-            Ok(if result.is_undefined() || result.is_null() { 0.0 } else { 1.0 })
-        },
+            // === ADD AI/ML TYPES HERE ===
+            HeapType::TensorF32 | HeapType::TensorF64 | HeapType::TensorI32 |
+            HeapType::TensorU8 | HeapType::TensorI8 | HeapType::TensorI16 | HeapType::TensorU16 |
+            HeapType::MatrixF32 | HeapType::MatrixF64 | HeapType::MatrixC32 | HeapType::MatrixC64 |
+            HeapType::VectorF32 | HeapType::VectorF64 | HeapType::VectorI32 |
+            HeapType::SparseMatrix | HeapType::Quantized8 | HeapType::Quantized16 |
+            HeapType::Embedding | HeapType::Attention |
+            HeapType::WeightF32 | HeapType::BiasF32 | HeapType::GradientF32 | HeapType::Activation |
+            HeapType::GPUTensor | HeapType::SIMDVector => {
+                // For AI/ML types, return 1.0 if the value exists, 0.0 otherwise
+                Ok(if result.is_undefined() || result.is_null() { 0.0 } else { 1.0 })
+            },
+        }
     }
-}
 
     fn clamp_value(&self, heap_type: HeapType, value: f64) -> f64 {
         match heap_type {
@@ -1136,4 +1210,3 @@ fn heap_type_to_str(heap_type: HeapType) -> &'static str {
         HeapType::SIMDVector => "simd_vector",
     }
 }
-
